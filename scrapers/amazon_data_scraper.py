@@ -10,7 +10,7 @@ from time import sleep
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, InvalidSessionIdException
 from selenium.webdriver.support import expected_conditions as EC
 
 COLORS = {
@@ -36,7 +36,7 @@ class AmazonDataScraper:
     def create_driver() -> webdriver.Remote:
         """Function to create and return a Selenium WebDriver instance."""
         chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument("--headless")
+        # chrome_options.add_argument("--headless")
         chrome_options.add_argument("--disable-notifications")
         chrome_options.add_argument("--incognito")
         chrome_options.add_argument("--disable-extensions")
@@ -67,35 +67,36 @@ class AmazonDataScraper:
 
             twister_options = twister_plus.find_elements(By.TAG_NAME, "ul")
 
-            twister_dict = {}
+            twister_list = []
             for option in twister_options:
+                
+                options_dict = {}
                 option_attribute = option.get_attribute("data-a-button-group")
                 option_name = option_attribute.split('"')[-2]
 
-                options_dict = {}
+                options_dict["type"] = option_name
+
                 options_list = option.find_elements(By.TAG_NAME, "li")
                 for option_li in options_list:
                     option_asin = option_li.get_attribute("data-asin")
-
                     if option_asin == asin:
                         continue
+                    options_dict["asin"] = option_asin
 
                     if option_name == 'color_name':
                         color_name = option_li.find_element(
                             By.TAG_NAME, "img").get_attribute("alt")
-                        options_dict[color_name] = option_asin
+                        options_dict["name"] = color_name.lower().strip()
                     else:
                         option_swatch = option_li.find_element(
                             By.CLASS_NAME, 'swatch-title-text-container').text.lower().strip()
+                        options_dict["name"] = option_swatch
 
-                        options_dict[option_swatch] = option_asin
-
-                if len(options_dict):
-                    twister_dict[option_name] = options_dict
+                    twister_list.append({**options_dict})
 
             log = f'[{asin}] {COLORS["green"]}Twister.{COLORS["reset"]}\n'
-            if len(twister_dict):
-                return (twister_dict, log)
+            if len(twister_list):
+                return (twister_list, log)
             else:
                 raise NoSuchElementException(f'No Twister for {asin}.')
         except NoSuchElementException:
@@ -105,7 +106,6 @@ class AmazonDataScraper:
 
     def scrap_products_data(self, asin: str, data: list) -> None:
         """Function to scrape data for a single product identified by its ASIN."""
-        images_list = []
         forbidden_images = ['HomeCustomProduct', 'play-icon-overla']
         logs = ''
 
@@ -123,28 +123,30 @@ class AmazonDataScraper:
             "asin": asin,
             "price": 0,
             "url": link,
-            "images": images_list
+            "images": []
         }
         self.driver.get(link)
 
         # Handle potential pop-ups and login forms
         try:
             # Wait for the continue button to appear and click it
-            continue_button = WebDriverWait(self.driver, randint(2,5)).until(EC.visibility_of_element_located((
+            continue_button = WebDriverWait(self.driver, randint(1,4)).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "a-button-text")))
             sleep(randint(2,4))  # Sleep to avoid overwhelming the server
             continue_button.click()
+            sleep(4)
             logs += f'[{asin}] {COLORS["green"]}Continue button.{COLORS["reset"]}\n'
         except:
             logs += f'[{asin}] {COLORS["red"]}No continue button.{COLORS["reset"]}\n'
 
         try:
             # Wait for the login form to appear
-            WebDriverWait(self.driver, randint(2,5)).until(EC.visibility_of_element_located((
+            WebDriverWait(self.driver, randint(1,4)).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "auth-workflow")))
             sleep(randint(2,4))  # Sleep to avoid overwhelming the server
             logs += f'[{asin}] {COLORS["green"]}Login form.{COLORS["reset"]}\n'
             self.driver.get(link)
+            sleep(4)
         except TimeoutException:
             logs += f'[{asin}] {COLORS["red"]}No login form.{COLORS["reset"]}\n'
         except Exception as e:
@@ -162,7 +164,7 @@ class AmazonDataScraper:
             else:
                 raise Exception('The item is not a celphone.')
         except TimeoutException:
-            logs += f'[{asin}] {COLORS["red"]}No breadcrumbs.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {COLORS["green"]}No breadcrumbs.{COLORS["reset"]}\n'
         except Exception:
             logs += f'[{asin}] {COLORS["red"]}Not a celphone.{COLORS["reset"]}\n'
             print(logs)
@@ -176,10 +178,12 @@ class AmazonDataScraper:
                 EC.presence_of_element_located((By.ID, "productTitle")))
 
             product["title"] = product_title.text  # Store the product title
-
             logs += f'[{asin}] {COLORS["green"]}Product title.{COLORS["reset"]}\n'
         except TimeoutException:
-            logs += f'[{asin}] {COLORS["red"]}No product title.{COLORS["reset"]}\n'
+            with open(f'../scraped_data/index_{asin}.html', 'w') as file:
+                file.writelines(self.driver.page_source)
+            logs += f'[{asin}] {COLORS["red"]}No load.{COLORS["reset"]}\n'
+            return
         except Exception as e:
             print(
                 f"{COLORS["red"]} [ERROR] Product title: {e} {COLORS["reset"]}")
@@ -198,7 +202,7 @@ class AmazonDataScraper:
                 image_split = image_link.split('_')
                 image_split[-2] = f"{image_split[-2][:2]}679"
                 image_link = '_'.join(image_split)
-                images_list.append(image_link)
+                product["images"].append({"url": image_link})
 
             logs += f'[{asin}] {COLORS["green"]}Images.{COLORS["reset"]}\n'
         except NoSuchElementException:
@@ -214,7 +218,8 @@ class AmazonDataScraper:
                 image_split = image_link.split('_')
                 image_split[-2] = f"{image_split[-2][:2]}679"
                 image_link = '_'.join(image_split)
-                images_list.append(image_link)
+                
+                product["images"].append({"url": image_link})
 
             logs += f'[{asin}] {COLORS["red"]}No images.{COLORS["reset"]}\n'
         except Exception as e:
@@ -277,8 +282,8 @@ class AmazonDataScraper:
         # Product twister ASIN
         twister = self.twister_scraper(asin=asin)
         if isinstance(twister, tuple):
-            twister_dict, log = twister
-            product["twister"] = twister_dict
+            twister_list, log = twister
+            product["twister"] = twister_list
             logs += log
         else:
             logs += twister
@@ -302,16 +307,21 @@ class AmazonDataScraper:
             features_table = feature_container.find_elements(By.TAG_NAME, "tr")
 
             # Find the espefied product features
-            specified_features = ["marca", "nombre del modelo", "color"]
+            specified_features = {
+                "marca": "brand", 
+                "nombre del modelo": "model", 
+                "color": "color"
+            }
             # Iterate through the features and extract the specified ones
             for feature_element in features_table:
                 feature_list = feature_element.find_elements(By.TAG_NAME, "td")
-                feature_name = feature_list[0].text.lower()
-                feature = feature_list[1].text.lower()
+                feature_name = feature_list[0].text.lower().strip()
+                feature = feature_list[1].text.lower().strip()
                 # Check if the feature name matches any of the specified features
-                for specified_feature in specified_features:
-                    if specified_feature in feature_name:
-                        product[specified_feature] = feature
+                for specified_feature in specified_features.keys():
+                    if specified_feature == feature_name:
+                        product[specified_features[specified_feature]] = feature
+
 
             logs += f'[{asin}] {COLORS["green"]}Product overview.{COLORS["reset"]}\n'
         except NoSuchElementException:
@@ -366,4 +376,9 @@ class AmazonDataScraper:
         data.append(product)  # Append the product data to the list
 
     def quit_driver(self):
-        self.driver.quit()
+        try:
+            self.driver.quit()
+        except InvalidSessionIdException:
+            print(f"{COLORS['red']}Driver session already closed.{COLORS['reset']}")
+        except Exception as e:
+            print(f"{COLORS['red']}Error quitting driver: {e}{COLORS['reset']}")

@@ -6,6 +6,7 @@ It initializes the scrapers, processes the product data, and saves the results t
 
 import os
 import json
+import requests
 
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor
@@ -80,7 +81,7 @@ def data_process(products: list):
     # Wait for all threads to complete
     for _ in executor_list:
         pass
-
+    
     # # Close all scrapers
     for scraper in data_scrapers:
         scraper.quit_driver()
@@ -142,7 +143,7 @@ def main(brands_to_search: list = ['oppo']) -> list:
     # Start the ASIN scraper
     asins_by_brand = asin_process(brands=brands_to_search) # Scrape ASINs
 
-    sleep(4)  # Sleep to avoid overwhelming the server
+    sleep(8)  # Sleep to avoid overwhelming the server
 
     # Prints the number of products found
     first_acc = 0
@@ -154,12 +155,12 @@ def main(brands_to_search: list = ['oppo']) -> list:
     # Append the ASINs to the data list
     final_dict = {}
     for brand, asins in asins_by_brand.items():
-        print(f"Processing {COLORS['blue']}{brand.title()}{COLORS['reset']} products...")
+        print(f"Processing {COLORS['blue']}{brand.title()}: {len(asins)}{COLORS['reset']} products...")
         products = data_process(asins)  # Process the ASINs
-        sleep(2)  # Sleep to avoid overwhelming the server
+        sleep(8)  # Sleep to avoid overwhelming the server
         final_dict[brand] = products
-        sleep(2)  # Sleep to avoid overwhelming the server
-        print(f"{brand.title()} products processed: {COLORS['blue']}{len(products)}{COLORS['reset']}.")    
+        sleep(8)  # Sleep to avoid overwhelming the server
+        print(f"{brand.title()} products processed: {COLORS['blue']}{len(products)}/{len(asins)}{COLORS['reset']}.")    
 
     del asins_by_brand  # Clear the ASINs dictionary to free memory
 
@@ -179,7 +180,13 @@ if __name__ == "__main__":
 
     products_dict = main(brands_to_search=BRANDS)
 
-    with open(DATA, 'w') as file:
-        json.dump(products_dict, file)
+    sleep(8)
+
+    for key, value in products_dict.items():
+        response = requests.put('http://localhost:80/api/products/amazon', json=value)
+        print(response.text)
+    # with open(DATA, 'w') as file:
+    #     json.dump(products_dict, file)
+
 
     print('Finishing program...')

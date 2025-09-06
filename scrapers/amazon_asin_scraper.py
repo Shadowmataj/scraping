@@ -55,9 +55,9 @@ class AmazonAsinScraper:
             self.category_filtering(category='celulares y accesorios')
             main_page = self.driver.current_url
             for category in categories:
-                self.category_filtering(category=category)
-                self.asins_scrape(brand, data)
-                self.driver.get(main_page)
+                if self.category_filtering(category=category):
+                    self.asins_scrape(brand, data)
+                    self.driver.get(main_page)
             asins_dict[brand] = data
             sleep(2)
             self.quit_driver()
@@ -162,7 +162,7 @@ class AmazonAsinScraper:
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
-    def category_filtering(self, category: str = 'Celulares y accesorios'):
+    def category_filtering(self, category: str = 'Celulares y accesorios') -> bool:
         """Method to filter the search results by category."""
         logs = f"{COLORS['green']}Filtering by category: {category}.{COLORS['reset']}\n"
         self.captchats()  # Handle any captcha or authentication issues
@@ -178,8 +178,10 @@ class AmazonAsinScraper:
             for department in department_options:
                 if department.text.lower() == category:
                     department.click()
-                    break
-            logs += f"{COLORS['green']}Category '{category}' filtered successfully.{COLORS['reset']}\n"
+                    logs += f"{COLORS['green']}Category '{category}' filtered successfully.{COLORS['reset']}\n"
+                    print(logs)
+                    del logs
+                    return True
         except TimeoutException:
             logs += f"{COLORS['red']}[ERROR] {category} filtering failed.{COLORS['reset']}\n"
         except Exception:
@@ -187,6 +189,8 @@ class AmazonAsinScraper:
 
         print(logs)
         del logs  # Clear logs after printing
+
+        return False
 
     def asins_scrape(self,brand: str, data: list):
         """Method to scrape ASINs from the search results."""
