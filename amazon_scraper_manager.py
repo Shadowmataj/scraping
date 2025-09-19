@@ -183,7 +183,7 @@ if __name__ == "__main__":
     sleep(8)
 
     for key, value in products_dict.items():
-        response = requests.put('http://localhost:80/api/products/amazon', json=value)
+        response = requests.post('http://167.88.45.40:5000/api/products/amazon', json=value)
         print(response.text)
     # with open(DATA, 'w') as file:
     #     json.dump(products_dict, file)
