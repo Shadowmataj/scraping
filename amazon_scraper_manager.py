@@ -5,7 +5,6 @@ It initializes the scrapers, processes the product data, and saves the results t
 """
 
 import os
-import json
 import requests
 
 from time import sleep
@@ -14,20 +13,22 @@ from concurrent.futures import ThreadPoolExecutor
 from scrapers.amazon_asin_scraper import AmazonAsinScraper
 from scrapers.amazon_data_scraper import AmazonDataScraper
 
+from dotenv import load_dotenv
+
 DATA = './scraped_data/data.json'
 THREADS = os.cpu_count()
 BRANDS = [
-    'samsung', 
+    'samsung',
     'apple',
-    'xiaomi', 
-    'oppo', 
-    'huawei', 
-    'motorola', 
-    'sony', 
-    'nokia', 
-    'cubot', 
-    'google', 
-    'nubia', 
+    'xiaomi',
+    'oppo',
+    'huawei',
+    'motorola',
+    'sony',
+    'nokia',
+    'cubot',
+    'google',
+    'nubia',
     'zte'
 ]
 
@@ -42,6 +43,10 @@ COLORS = {
     "reset": '\033[0m'
 }
 
+load_dotenv()
+
+EMAIL = os.getenv('EMAIL')
+PASSWORD = os.getenv('PASSWORD')
 
 def data_process(products: list):
     """Function to process the products using multiple threads.
@@ -81,13 +86,14 @@ def data_process(products: list):
     # Wait for all threads to complete
     for _ in executor_list:
         pass
-    
+
     # # Close all scrapers
     for scraper in data_scrapers:
         scraper.quit_driver()
 
     # Return the scraped data
     return data
+
 
 def asin_process(brands: list) -> dict:
     """Function to process the ASINs using multiple threads.
@@ -132,6 +138,7 @@ def asin_process(brands: list) -> dict:
     # Return the scraped data
     return asins_dict
 
+
 def main(brands_to_search: list = ['oppo']) -> list:
     """Main function to start the scraping process."""
     # Main execution starts here
@@ -141,7 +148,7 @@ def main(brands_to_search: list = ['oppo']) -> list:
         print(f"{COLORS['blue']}{brand_to_search}{COLORS['reset']}")
 
     # Start the ASIN scraper
-    asins_by_brand = asin_process(brands=brands_to_search) # Scrape ASINs
+    asins_by_brand = asin_process(brands=brands_to_search)  # Scrape ASINs
 
     sleep(8)  # Sleep to avoid overwhelming the server
 
@@ -155,12 +162,14 @@ def main(brands_to_search: list = ['oppo']) -> list:
     # Append the ASINs to the data list
     final_dict = {}
     for brand, asins in asins_by_brand.items():
-        print(f"Processing {COLORS['blue']}{brand.title()}: {len(asins)}{COLORS['reset']} products...")
+        print(
+            f"Processing {COLORS['blue']}{brand.title()}: {len(asins)}{COLORS['reset']} products...")
         products = data_process(asins)  # Process the ASINs
         sleep(8)  # Sleep to avoid overwhelming the server
         final_dict[brand] = products
         sleep(8)  # Sleep to avoid overwhelming the server
-        print(f"{brand.title()} products processed: {COLORS['blue']}{len(products)}/{len(asins)}{COLORS['reset']}.")    
+        print(
+            f"{brand.title()} products processed: {COLORS['blue']}{len(products)}/{len(asins)}{COLORS['reset']}.")
 
     del asins_by_brand  # Clear the ASINs dictionary to free memory
 
@@ -182,11 +191,37 @@ if __name__ == "__main__":
 
     sleep(8)
 
-    for key, value in products_dict.items():
-        response = requests.post('http://167.88.45.40:5000/api/products/amazon', json=value)
-        print(response.text)
-    # with open(DATA, 'w') as file:
-    #     json.dump(products_dict, file)
+    login_response = requests.post(
+        'http://167.88.45.40:5000/api/login',
+        json={
+            "email": EMAIL,
+            "password": PASSWORD
+        })
+    
+    login_json = login_response.json()
+    access_token = login_json["access_token"]
 
+    for key, value in products_dict.items():
+        post_response = requests.put(
+            'http://167.88.45.40:5000/api/products/amazon', 
+            json=value,
+            headers={
+                "Authorization": f"Bearer {access_token}"
+            })
+        print(post_response.text)
+        post_json = post_response.json()
+        pending_asins = post_json["to_create"]
+        pending_list = []
+        if len(pending_asins):
+            for product in value:
+                if product["asin"] in pending_asins:
+                    pending_list.append(product)
+
+            post_response = requests.post(
+                'http://167.88.45.40:5000/api/products/amazon', 
+                json=pending_list,
+                headers={
+                    "Authorization": f"Bearer {access_token}"
+                })
 
     print('Finishing program...')

@@ -24,6 +24,21 @@ COLORS = {
     "reset": '\033[0m'
 }
 
+BRANDS = [
+    'samsung',
+    'apple',
+    'xiaomi',
+    'oppo',
+    'huawei',
+    'motorola',
+    'sony',
+    'nokia',
+    'cubot',
+    'google',
+    'nubia',
+    'zte'
+]
+
 
 class AmazonDataScraper:
     """Main amazon data scraper class"""
@@ -117,13 +132,14 @@ class AmazonDataScraper:
         ]
 
         titles_filter = ['funda', 'case', 'protector', 'cristal',
-                        'glass', 'mica', 'cable', 'audífono',
-                        'headphone', 'earphone', 'bolígrafo',
-                        'cover', 'ipad', 'tablet', 'watch', 'band',
-                        'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
-                        'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
-                        'computadora de bolsillo', 'galaxy book'
-                        ]
+                         'glass', 'mica', 'cable', 'audífono',
+                         'headphone', 'earphone', 'bolígrafo',
+                         'cover', 'ipad', 'tablet', 'watch', 'band',
+                         'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
+                         'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
+                         'computadora de bolsillo', 'galaxy book', 'carcasa', 'smarttag',
+                         'E5783-230a'
+                         ]
 
         # Define the link to the product page
         link = f"https://www.amazon.com.mx/dp/{asin}"
@@ -190,7 +206,8 @@ class AmazonDataScraper:
                 raise NoSuchElementException('No title found.')
             lower_title = product_title.text.lower()
             if any(forbidden_title in lower_title for forbidden_title in titles_filter):
-                if 'bundle' not in lower_title: raise Exception('The item is not a celphone.')
+                if 'bundle' not in lower_title:
+                    raise Exception('The item is not a celphone.')
             product["title"] = product_title.text  # Store the product title
             logs += f'[{asin}] {COLORS["green"]}Product title.{COLORS["reset"]}\n'
 
@@ -253,14 +270,22 @@ class AmazonDataScraper:
                 By.CLASS_NAME, "a-price-fraction")
 
             # Combine whole and fractional parts to form the complete price
-            product["price"] = float(
+            final_price = float(
                 f"{product_price.text.replace(',', '')}.{product_price_fraction.text.replace('.', '')}")
+
+            if final_price < 601:
+                raise Exception("Price is under $601")
+
+            product["price"] = final_price
 
             logs += f'[{asin}] {COLORS["green"]}Price.{COLORS["reset"]}\n'
         except NoSuchElementException:
             logs += f'[{asin}] {COLORS["red"]}No price.{COLORS["reset"]}\n'
         except Exception as e:
-            print(f"{COLORS["red"]} [ERROR] Price: {e} {COLORS["reset"]}")
+            logs += f'[{asin}] {COLORS["red"]}Price under point price.{COLORS["reset"]}\n'
+            print(logs)
+            del logs
+            return
 
         # Basis price and saving percentage
         try:
@@ -338,13 +363,18 @@ class AmazonDataScraper:
                 # Check if the feature name matches any of the specified features
                 for specified_feature in specified_features.keys():
                     if specified_feature == feature_name:
+                        if specified_features[specified_feature] == "brand" and feature not in BRANDS:
+                            raise Exception("Not a specified brand.")
                         product[specified_features[specified_feature]] = feature
 
             logs += f'[{asin}] {COLORS["green"]}Product overview.{COLORS["reset"]}\n'
         except NoSuchElementException:
             logs += f'[{asin}] {COLORS["red"]}No product overview.{COLORS["reset"]}\n'
         except Exception as e:
-            print(f"{COLORS["red"]} [ERROR] features: {e} {COLORS["reset"]}")
+            logs += f'[{asin}] {COLORS["red"]}Not a scpecified brand.{COLORS["reset"]}\n'
+            print(logs)
+            del logs
+            return
 
         # Product ranking
         try:
