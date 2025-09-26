@@ -6,30 +6,25 @@ and scrapes the ASINs from the search results.
 """
 
 from time import sleep
+from .base_amazon_scraper import BaseAmazonScraper
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
+from selenium.common.exceptions import (
+    TimeoutException,
+    NoSuchElementException,
+    ElementClickInterceptedException,
+    InvalidSessionIdException)
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 
-COLORS = {
-    "red": "\033[91m",
-    "green": "\033[92m",
-    "yellow": "\033[93m",
-    "blue": "\033[94m",
-    "purple": "\033[95m",
-    "cyan": "\033[96m",
-    "white": "\033[97m",
-    "reset": '\033[0m'
-}
 
-
-class AmazonAsinScraper:
+class AmazonAsinScraper(BaseAmazonScraper):
     """Main Amazon ASIN scraper class for scraping product data based on brand."""
 
     def __init__(self):
         """Initialize the scraper with a Selenium WebDriver instance."""
+        super().__init__()
         chrome_options = webdriver.ChromeOptions()
         chrome_options.add_argument("--start-fullscreen")
         chrome_options.add_argument("--incognito")
@@ -64,7 +59,7 @@ class AmazonAsinScraper:
 
     def captchats(self):
         """Method to handle captcha or authentication issues."""
-        logs = f"{COLORS['green']}Handling captcha or authentication issues.{COLORS['reset']}\n"
+        logs = f"{self.colors['green']}Handling captcha or authentication issues.{self.colors['reset']}\n"
         # Wait for the continue button and click it if it appears
         # This is to handle any pop-ups or modals that might appear
         # when accessing the Amazon homepage
@@ -72,12 +67,12 @@ class AmazonAsinScraper:
             continue_button = WebDriverWait(self.driver, 1).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "a-button-text")))
             continue_button.click()
-            logs += f"{COLORS['green']}Continue button clicked successfully.{COLORS['reset']}\n"
-            logs = f"{COLORS['red']}Captcha detected.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Continue button clicked successfully.{self.colors['reset']}\n"
+            logs = f"{self.colors['red']}Captcha detected.{self.colors['reset']}\n"
         except TimeoutException:
-            logs += f"{COLORS['green']}Continue button not found.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Continue button not found.{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['red']}[ERROR] Error clicking continue button.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}[ERROR] Error clicking continue button.{self.colors['reset']}\n"
 
         # Wait for the authentication workflow to complete
         # This is to ensure that the page is fully loaded before performing any actions
@@ -85,18 +80,18 @@ class AmazonAsinScraper:
             WebDriverWait(self.driver, 1).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "auth-workflow")))
             self.driver.get('https://amazon.com.mx')
-            logs += f"{COLORS['green']}Authentication workflow completed successfully.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Authentication workflow completed successfully.{self.colors['reset']}\n"
         except TimeoutException:
-            logs += f"{COLORS['green']}Authentication workflow not found.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Authentication workflow not found.{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['red']}[ERROR] Error waiting for authentication workflow.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}[ERROR] Error waiting for authentication workflow.{self.colors['reset']}\n"
 
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
     def brand_search(self, brand: str):
         """Method to search for the brand on Amazon."""
-        logs = f"{COLORS['green']}Searching for brand: {brand}.{COLORS['reset']}\n"
+        logs = f"{self.colors['green']}Searching for brand: {brand}.{self.colors['reset']}\n"
 
         self.captchats()  # Handle any captcha or authentication issues
 
@@ -110,25 +105,25 @@ class AmazonAsinScraper:
             # Enter the brand name into the search input field
             nav_var_input.send_keys(brand)
             nav_var_input.send_keys(Keys.ENTER)
-            logs += f"{COLORS['green']}Brand '{brand}' searched successfully.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Brand '{brand}' searched successfully.{self.colors['reset']}\n"
         except TimeoutException:
             # If the search input field is not found, try to find it in the navigation bar
             # This is a fallback in case the search input field is not available
-            logs += f"{COLORS['red']}Search input field not found (trying navigation bar).{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}Search input field not found (trying navigation bar).{self.colors['reset']}\n"
             nav_var_input = WebDriverWait(self.driver, 1).until(
                 EC.visibility_of_element_located((By.ID, 'nav-bb-search')))
             nav_var_input.send_keys(brand)
             nav_var_input.send_keys(Keys.ENTER)
-            logs += f"{COLORS['green']}Brand '{brand}' searched successfully in navigation bar.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Brand '{brand}' searched successfully in navigation bar.{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['red']}[ERROR] Error searching for brand.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}[ERROR] Error searching for brand.{self.colors['reset']}\n"
 
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
     def brand_filtering(self, brand: str):
         """Method to filter the search results by brand."""
-        logs = f"{COLORS['green']}Filtering by brand: {brand}.{COLORS['reset']}\n"
+        logs = f"{self.colors['green']}Filtering by brand: {brand}.{self.colors['reset']}\n"
         brand_list = brand.split(" ")
 
         self.captchats()  # Handle any captcha or authentication issues
@@ -151,20 +146,20 @@ class AmazonAsinScraper:
                         brand_list.remove(lower_element)
                         checkbox.click()
                         break
-            logs += f"{COLORS['green']}Brand '{brand}' filtered successfully.{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Brand '{brand}' filtered successfully.{self.colors['reset']}\n"
         except TimeoutException:
-            logs += f"{COLORS['red']}[ERROR] Brand filtering failed.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}[ERROR] Brand filtering failed.{self.colors['reset']}\n"
         except NoSuchElementException:
-            logs += f"{COLORS['red']}No brand refinements found.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}No brand refinements found.{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['red']}[ERROR] Error filtering brands.{COLORS['reset']}\n"
-        
+            logs += f"{self.colors['red']}[ERROR] Error filtering brands.{self.colors['reset']}\n"
+
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
     def category_filtering(self, category: str = 'Celulares y accesorios') -> bool:
         """Method to filter the search results by category."""
-        logs = f"{COLORS['green']}Filtering by category: {category}.{COLORS['reset']}\n"
+        logs = f"{self.colors['green']}Filtering by category: {category}.{self.colors['reset']}\n"
         self.captchats()  # Handle any captcha or authentication issues
         try:
             # Wait for the departments section to be visible and select the 'Celulares y accesorios' department
@@ -178,23 +173,23 @@ class AmazonAsinScraper:
             for department in department_options:
                 if department.text.lower() == category:
                     department.click()
-                    logs += f"{COLORS['green']}Category '{category}' filtered successfully.{COLORS['reset']}\n"
+                    logs += f"{self.colors['green']}Category '{category}' filtered successfully.{self.colors['reset']}\n"
                     print(logs)
                     del logs
                     return True
         except TimeoutException:
-            logs += f"{COLORS['red']}[ERROR] {category} filtering failed.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}[ERROR] {category} filtering failed.{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['red']}[ERROR] Error filtering {category}.{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}[ERROR] Error filtering {category}.{self.colors['reset']}\n"
 
         print(logs)
         del logs  # Clear logs after printing
 
         return False
 
-    def asins_scrape(self,brand: str, data: list):
+    def asins_scrape(self, brand: str, data: list):
         """Method to scrape ASINs from the search results."""
-        logs = f"{COLORS['green']}Scraping {brand} ASINs.{COLORS['reset']}\n"
+        logs = f"{self.colors['green']}Scraping {brand} ASINs.{self.colors['reset']}\n"
         asin_list = []
         count = 1
         color_count = 0
@@ -204,35 +199,35 @@ class AmazonAsinScraper:
         try:
             WebDriverWait(self.driver, 1).until(
                 EC.visibility_of_element_located((By.XPATH, '//*[@id="search"]/div[1]/div[1]/div/span[1]/div[1]/div[2]/div/div/div/h3/span')))
-            logs += f"{COLORS['red']}Empty results loaded successfully (exit).{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}Empty results loaded successfully (exit).{self.colors['reset']}\n"
             return
         except TimeoutException:
-            logs += f"{COLORS['green']}Search results not loaded (continue).{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Search results not loaded (continue).{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['green']}[ERROR] Error loading search results (continue).{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}[ERROR] Error loading search results (continue).{self.colors['reset']}\n"
 
         # If the last element is not found, try to find the search results header
         # This is to handle cases where the search results page structure might differ
         try:
             WebDriverWait(self.driver, 1).until(
                 EC.visibility_of_element_located((By.XPATH, '//*[@id="search"]/div[1]/div[1]/div/span[1]/div[1]/div[1]/div/div/div/h3/span')))
-            logs += f"{COLORS['red']}Empty results header found (exit).{COLORS['reset']}\n"
+            logs += f"{self.colors['red']}Empty results header found (exit).{self.colors['reset']}\n"
             return
         except TimeoutException:
-            logs += f"{COLORS['green']}Search results header not found (continue).{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}Search results header not found (continue).{self.colors['reset']}\n"
         except Exception:
-            logs += f"{COLORS['green']}[ERROR] Finding Empty results header (continue).{COLORS['reset']}\n"
+            logs += f"{self.colors['green']}[ERROR] Finding Empty results header (continue).{self.colors['reset']}\n"
 
         while True:
             try:
                 # Search for the products count element to ensure the page has loaded
                 products_count = WebDriverWait(self.driver, 1).until(
                     EC.visibility_of_element_located((By.CLASS_NAME, "s-breadcrumb-header-text")))
-                logs += f"{COLORS['green']}Products count found: {products_count.text}.{COLORS['reset']}\n"
+                logs += f"{self.colors['green']}Products count found: {products_count.text}.{self.colors['reset']}\n"
             except TimeoutException:
-                logs += f"{COLORS['red']}[ERROR] No products found.{COLORS['reset']}\n"
+                logs += f"{self.colors['red']}[ERROR] No products found.{self.colors['reset']}\n"
             except Exception:
-                logs += f"{COLORS['red']}[ERROR] Error finding products count.{COLORS['reset']}\n"
+                logs += f"{self.colors['red']}[ERROR] Error finding products count.{self.colors['reset']}\n"
 
             items = []
             sleep(4)
@@ -248,13 +243,13 @@ class AmazonAsinScraper:
                 # If the ASIN is valid, add it to the list
                 if data_asin != '':
                     # Check for color variations of the product
-                    colors = item.find_elements(
+                    self.colors = item.find_elements(
                         By.CLASS_NAME, "s-color-swatch-pad")
 
                     # If color variations exist, add their ASINs as well
-                    if len(colors):
+                    if len(self.colors):
                         color_count += 1
-                        for color in colors:
+                        for color in self.colors:
                             color_link = color.find_element(
                                 By.TAG_NAME, "div").get_attribute("data-csa-c-swatch-url")
                             color_asin = color_link.split("/")[3]
@@ -272,13 +267,13 @@ class AmazonAsinScraper:
                     break
                 next_page_button.click()
             except TimeoutException:
-                logs += f"{COLORS['red']}[ERROR] No next page button found(exit).{COLORS['reset']}\n"
+                logs += f"{self.colors['red']}[ERROR] No next page button found(exit).{self.colors['reset']}\n"
                 break
             except ElementClickInterceptedException:
-                logs += f"{COLORS['red']}[ERROR] Next page button not clickable (refresh).{COLORS['reset']}\n"
+                logs += f"{self.colors['red']}[ERROR] Next page button not clickable (refresh).{self.colors['reset']}\n"
                 self.driver.refresh()
             except Exception:
-                logs += f"{COLORS['red']}[ERROR] Error clicking next page (exit).{COLORS['reset']}\n"
+                logs += f"{self.colors['red']}[ERROR] Error clicking next page (exit).{self.colors['reset']}\n"
                 break
 
         print(logs)
@@ -289,4 +284,11 @@ class AmazonAsinScraper:
         sleep(4)  # Sleep to avoid overwhelming the server
 
     def quit_driver(self):
-        self.driver.quit()
+        try:
+            self.driver.quit()
+        except InvalidSessionIdException:
+            print(
+                f"{self.colors['red']}Driver session already closed.{self.colors['reset']}")
+        except Exception as e:
+            print(
+                f"{self.colors['red']}Error quitting driver: {e}{self.colors['reset']}")

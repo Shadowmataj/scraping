@@ -7,22 +7,12 @@ and saving percentage, and handles potential pop-ups and login forms.
 from random import randint
 from time import sleep
 
+from .base_amazon_scraper import BaseAmazonScraper
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, InvalidSessionIdException
 from selenium.webdriver.support import expected_conditions as EC
-
-COLORS = {
-    "red": "\033[91m",
-    "green": "\033[92m",
-    "yellow": "\033[93m",
-    "blue": "\033[94m",
-    "purple": "\033[95m",
-    "cyan": "\033[96m",
-    "white": "\033[97m",
-    "reset": '\033[0m'
-}
 
 BRANDS = [
     'samsung',
@@ -40,11 +30,12 @@ BRANDS = [
 ]
 
 
-class AmazonDataScraper:
+class AmazonDataScraper(BaseAmazonScraper):
     """Main amazon data scraper class"""
 
     def __init__(self):
         """Initialize the scraper with a Selenium WebDriver instance."""
+        super().__init__()
         self.driver = self.create_driver()
 
     @staticmethod
@@ -67,11 +58,12 @@ class AmazonDataScraper:
         driver.delete_all_cookies()
         return driver
 
-    def data_scraper(self, products: list, data: list) -> None:
+    def main_method(self, products: list, data: list) -> None:
         """Function to scrape data for a list of products."""
         for product in products:
             self.scrap_products_data(
                 asin=product, data=data)
+        self.quit_driver()
 
     def twister_scraper(self, asin: str) -> None:
         """Function to scrape twister data for a product identified by its ASIN."""
@@ -109,15 +101,15 @@ class AmazonDataScraper:
 
                     twister_list.append({**options_dict})
 
-            log = f'[{asin}] {COLORS["green"]}Twister.{COLORS["reset"]}\n'
+            log = f'[{asin}] {self.colors["green"]}Twister.{self.colors["reset"]}\n'
             if len(twister_list):
                 return (twister_list, log)
             else:
                 raise NoSuchElementException(f'No Twister for {asin}.')
         except NoSuchElementException:
-            return f'[{asin}] {COLORS["red"]}No Twister.{COLORS["reset"]}\n'
+            return f'[{asin}] {self.colors["red"]}No Twister.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{COLORS["red"]}[ERROR] Twisters: {e} {COLORS["reset"]}")
+            print(f"{self.colors["red"]}[ERROR] Twisters: {e} {self.colors["reset"]}")
 
     def scrap_products_data(self, asin: str, data: list) -> None:
         """Function to scrape data for a single product identified by its ASIN."""
@@ -131,15 +123,16 @@ class AmazonDataScraper:
             'celulares y smartphones desbloqueados'
         ]
 
-        titles_filter = ['funda', 'case', 'protector', 'cristal',
-                         'glass', 'mica', 'cable', 'audífono',
-                         'headphone', 'earphone', 'bolígrafo',
-                         'cover', 'ipad', 'tablet', 'watch', 'band',
-                         'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
-                         'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
-                         'computadora de bolsillo', 'galaxy book', 'carcasa', 'smarttag',
-                         'E5783-230a'
-                         ]
+        titles_filter = [
+            'funda', 'case', 'protector', 'cristal',
+            'glass', 'mica', 'cable', 'audífono',
+            'headphone', 'earphone', 'bolígrafo',
+            'cover', 'ipad', 'tablet', 'watch', 'band',
+            'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
+            'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
+            'computadora de bolsillo', 'galaxy book', 'carcasa', 'smarttag',
+            'E5783-230a'
+        ]
 
         # Define the link to the product page
         link = f"https://www.amazon.com.mx/dp/{asin}"
@@ -161,22 +154,22 @@ class AmazonDataScraper:
             sleep(randint(2, 4))  # Sleep to avoid overwhelming the server
             continue_button.click()
             sleep(4)
-            logs += f'[{asin}] {COLORS["green"]}Continue button.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Continue button.{self.colors["reset"]}\n'
         except:
-            logs += f'[{asin}] {COLORS["red"]}No continue button.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No continue button.{self.colors["reset"]}\n'
 
         try:
             # Wait for the login form to appear
             WebDriverWait(self.driver, randint(1, 4)).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "auth-workflow")))
             sleep(randint(2, 4))  # Sleep to avoid overwhelming the server
-            logs += f'[{asin}] {COLORS["green"]}Login form.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Login form.{self.colors["reset"]}\n'
             self.driver.get(link)
             sleep(4)
         except TimeoutException:
-            logs += f'[{asin}] {COLORS["red"]}No login form.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No login form.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{COLORS["red"]}[ERROR] Auth: {e}{COLORS["reset"]}")
+            print(f"{self.colors["red"]}[ERROR] Auth: {e}{self.colors["reset"]}")
 
         # Check if the product belongs to the celphone category
         try:
@@ -186,13 +179,13 @@ class AmazonDataScraper:
                 By.ID, "wayfinding-breadcrumbs_feature_div")))
 
             if any(breadcrumb in breadcrumbs.text.lower() for breadcrumb in allowed_breadcrums):
-                logs += f'[{asin}] {COLORS["green"]}Celphone.{COLORS["reset"]}\n'
+                logs += f'[{asin}] {self.colors["green"]}Celphone.{self.colors["reset"]}\n'
             else:
                 raise Exception('The item is not a celphone.')
         except TimeoutException:
-            logs += f'[{asin}] {COLORS["green"]}No breadcrumbs.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}No breadcrumbs.{self.colors["reset"]}\n'
         except Exception:
-            logs += f'[{asin}] {COLORS["red"]}Not a celphone.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}Not a celphone.{self.colors["reset"]}\n'
             print(logs)
             del logs
             return
@@ -209,16 +202,16 @@ class AmazonDataScraper:
                 if 'bundle' not in lower_title:
                     raise Exception('The item is not a celphone.')
             product["title"] = product_title.text  # Store the product title
-            logs += f'[{asin}] {COLORS["green"]}Product title.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Product title.{self.colors["reset"]}\n'
 
         except TimeoutException:
-            logs += f'[{asin}] {COLORS["red"]}No load.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No load.{self.colors["reset"]}\n'
             return
         except NoSuchElementException:
-            logs += f'[{asin}] {COLORS["red"]}Not a celphone.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}Not a celphone.{self.colors["reset"]}\n'
             return
         except Exception as e:
-            logs += f'[{asin}] {COLORS["red"]}Not a celphone.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}Not a celphone.{self.colors["reset"]}\n'
             print(logs)
             del logs
             return
@@ -239,7 +232,7 @@ class AmazonDataScraper:
                 image_link = '_'.join(image_split)
                 product["images"].append({"url": image_link})
 
-            logs += f'[{asin}] {COLORS["green"]}Images.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Images.{self.colors["reset"]}\n'
         except NoSuchElementException:
             images_container = self.driver.find_element(
                 By.ID, 'altImages')
@@ -256,9 +249,9 @@ class AmazonDataScraper:
 
                 product["images"].append({"url": image_link})
 
-            logs += f'[{asin}] {COLORS["red"]}No images.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No images.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{COLORS["red"]} [ERROR] Images: {e} {COLORS["reset"]}")
+            print(f"{self.colors["red"]} [ERROR] Images: {e} {self.colors["reset"]}")
 
         # Product price
         try:
@@ -278,11 +271,11 @@ class AmazonDataScraper:
 
             product["price"] = final_price
 
-            logs += f'[{asin}] {COLORS["green"]}Price.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Price.{self.colors["reset"]}\n'
         except NoSuchElementException:
-            logs += f'[{asin}] {COLORS["red"]}No price.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No price.{self.colors["reset"]}\n'
         except Exception as e:
-            logs += f'[{asin}] {COLORS["red"]}Price under point price.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}Price under point price.{self.colors["reset"]}\n'
             print(logs)
             del logs
             return
@@ -298,12 +291,12 @@ class AmazonDataScraper:
                     "%", '').replace('-', '')
                 product["saving_percentage"] = int(f"{saving_percentage}")
 
-            logs += f'[{asin}] {COLORS["green"]}Saving.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Saving.{self.colors["reset"]}\n'
         except NoSuchElementException:
-            logs += f'[{asin}] {COLORS["red"]}No saving.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No saving.{self.colors["reset"]}\n'
         except Exception as e:
             print(
-                f"{COLORS["red"]} [ERROR] Savind percentage: {e} {COLORS["reset"]}")
+                f"{self.colors["red"]} [ERROR] Savind percentage: {e} {self.colors["reset"]}")
 
         try:
             basis_price = self.driver.find_element(
@@ -315,12 +308,12 @@ class AmazonDataScraper:
             product["basis_price"] = float(
                 basis_price_filtered[-1].replace('$', '').replace(',', ''))
 
-            logs += f'[{asin}] {COLORS["green"]}Basis price.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Basis price.{self.colors["reset"]}\n'
         except NoSuchElementException:
-            logs += f'[{asin}] {COLORS["red"]}No basis price.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No basis price.{self.colors["reset"]}\n'
         except Exception as e:
             print(
-                f"{COLORS["red"]} [ERROR] Basis price: {e} {COLORS["reset"]}")
+                f"{self.colors["red"]} [ERROR] Basis price: {e} {self.colors["reset"]}")
 
         # Product twister ASIN
         twister = self.twister_scraper(asin=asin)
@@ -344,7 +337,7 @@ class AmazonDataScraper:
                 pass
             except Exception as e:
                 print(
-                    f"{COLORS["red"]} [ERROR] PoExpander: {e} {COLORS["reset"]}")
+                    f"{self.colors["red"]} [ERROR] PoExpander: {e} {self.colors["reset"]}")
 
             # Extract the table containing product features
             features_table = feature_container.find_elements(By.TAG_NAME, "tr")
@@ -367,11 +360,11 @@ class AmazonDataScraper:
                             raise Exception("Not a specified brand.")
                         product[specified_features[specified_feature]] = feature
 
-            logs += f'[{asin}] {COLORS["green"]}Product overview.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Product overview.{self.colors["reset"]}\n'
         except NoSuchElementException:
-            logs += f'[{asin}] {COLORS["red"]}No product overview.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No product overview.{self.colors["reset"]}\n'
         except Exception as e:
-            logs += f'[{asin}] {COLORS["red"]}Not a scpecified brand.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}Not a scpecified brand.{self.colors["reset"]}\n'
             print(logs)
             del logs
             return
@@ -410,11 +403,11 @@ class AmazonDataScraper:
             if not product.get('ranking'):
                 raise NoSuchElementException('Ranking not found.')
 
-            logs += f'[{asin}] {COLORS["green"]}Ranking.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Ranking.{self.colors["reset"]}\n'
         except NoSuchElementException:
-            logs += f'[{asin}] {COLORS["red"]}No ranking.{COLORS["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No ranking.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{COLORS["red"]} [ERROR] ranking: {e} {COLORS["reset"]}")
+            print(f"{self.colors["red"]} [ERROR] ranking: {e} {self.colors["reset"]}")
 
         # Print the logs for debugging
         print(logs)
@@ -427,7 +420,7 @@ class AmazonDataScraper:
             self.driver.quit()
         except InvalidSessionIdException:
             print(
-                f"{COLORS['red']}Driver session already closed.{COLORS['reset']}")
+                f"{self.colors['red']}Driver session already closed.{self.colors['reset']}")
         except Exception as e:
             print(
-                f"{COLORS['red']}Error quitting driver: {e}{COLORS['reset']}")
+                f"{self.colors['red']}Error quitting driver: {e}{self.colors['reset']}")
