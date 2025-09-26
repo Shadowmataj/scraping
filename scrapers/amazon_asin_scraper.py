@@ -7,13 +7,12 @@ and scrapes the ASINs from the search results.
 
 from time import sleep
 from .base_amazon_scraper import BaseAmazonScraper
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
     TimeoutException,
     NoSuchElementException,
     ElementClickInterceptedException,
-    InvalidSessionIdException)
+)
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
@@ -25,17 +24,14 @@ class AmazonAsinScraper(BaseAmazonScraper):
     def __init__(self):
         """Initialize the scraper with a Selenium WebDriver instance."""
         super().__init__()
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument("--start-fullscreen")
-        chrome_options.add_argument("--incognito")
-        self.driver = webdriver.Remote(
-            command_executor='http://localhost:4444/wd/hub',  # URL of the remote server
-            options=chrome_options
+        self.driver = self._create_driver(
+            "--start-fullscreen",
+            "--incognito",
         )
-        self.driver.delete_all_cookies()
 
     def main_method(self, brand_list: list, asins_dict: dict):
         """Main method to start the scraping process for a given brand."""
+
         categories = [
             'banda ancha móvil',
             'celulares y smartphones de prepago',
@@ -44,56 +40,25 @@ class AmazonAsinScraper(BaseAmazonScraper):
         for brand in brand_list:
             # Initialize the data list for the brand
             data = []
-            self.driver.get('https://amazon.com.mx')
-            self.brand_search(brand)
-            self.brand_filtering(brand)
-            self.category_filtering(category='celulares y accesorios')
+            self.driver.get(self.amazon_url)
+            self._brand_search(brand)
+            self._brand_filtering(brand)
+            self._category_filtering(category='celulares y accesorios')
             main_page = self.driver.current_url
             for category in categories:
-                if self.category_filtering(category=category):
-                    self.asins_scrape(brand, data)
+                if self._category_filtering(category=category):
+                    self._asins_scrape(brand, data)
                     self.driver.get(main_page)
             asins_dict[brand] = data
             sleep(2)
-            self.quit_driver()
+            self._quit_driver()
 
-    def captchats(self):
-        """Method to handle captcha or authentication issues."""
-        logs = f"{self.colors['green']}Handling captcha or authentication issues.{self.colors['reset']}\n"
-        # Wait for the continue button and click it if it appears
-        # This is to handle any pop-ups or modals that might appear
-        # when accessing the Amazon homepage
-        try:
-            continue_button = WebDriverWait(self.driver, 1).until(EC.visibility_of_element_located((
-                By.CLASS_NAME, "a-button-text")))
-            continue_button.click()
-            logs += f"{self.colors['green']}Continue button clicked successfully.{self.colors['reset']}\n"
-            logs = f"{self.colors['red']}Captcha detected.{self.colors['reset']}\n"
-        except TimeoutException:
-            logs += f"{self.colors['green']}Continue button not found.{self.colors['reset']}\n"
-        except Exception:
-            logs += f"{self.colors['red']}[ERROR] Error clicking continue button.{self.colors['reset']}\n"
-
-        # Wait for the authentication workflow to complete
-        # This is to ensure that the page is fully loaded before performing any actions
-        try:
-            WebDriverWait(self.driver, 1).until(EC.visibility_of_element_located((
-                By.CLASS_NAME, "auth-workflow")))
-            self.driver.get('https://amazon.com.mx')
-            logs += f"{self.colors['green']}Authentication workflow completed successfully.{self.colors['reset']}\n"
-        except TimeoutException:
-            logs += f"{self.colors['green']}Authentication workflow not found.{self.colors['reset']}\n"
-        except Exception:
-            logs += f"{self.colors['red']}[ERROR] Error waiting for authentication workflow.{self.colors['reset']}\n"
-
-        print(logs)  # Print logs for debugging
-        del logs  # Clear logs after printing
-
-    def brand_search(self, brand: str):
+    def _brand_search(self, brand: str):
         """Method to search for the brand on Amazon."""
+
         logs = f"{self.colors['green']}Searching for brand: {brand}.{self.colors['reset']}\n"
 
-        self.captchats()  # Handle any captcha or authentication issues
+        self._asin_captchats()  # Handle any captcha or authentication issues
 
         # Find the search input field and enter the brand name
         # This is to search for the brand on Amazon
@@ -121,12 +86,13 @@ class AmazonAsinScraper(BaseAmazonScraper):
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
-    def brand_filtering(self, brand: str):
+    def _brand_filtering(self, brand: str):
         """Method to filter the search results by brand."""
+
         logs = f"{self.colors['green']}Filtering by brand: {brand}.{self.colors['reset']}\n"
         brand_list = brand.split(" ")
 
-        self.captchats()  # Handle any captcha or authentication issues
+        self._asin_captchats()  # Handle any captcha or authentication issues
         try:
             for _ in range(len(brand_list)):
                 # Find the brands refinements section and click on the brand checkboxes
@@ -157,10 +123,11 @@ class AmazonAsinScraper(BaseAmazonScraper):
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
-    def category_filtering(self, category: str = 'Celulares y accesorios') -> bool:
+    def _category_filtering(self, category: str = 'Celulares y accesorios') -> bool:
         """Method to filter the search results by category."""
+
         logs = f"{self.colors['green']}Filtering by category: {category}.{self.colors['reset']}\n"
-        self.captchats()  # Handle any captcha or authentication issues
+        self._asin_captchats()  # Handle any captcha or authentication issues
         try:
             # Wait for the departments section to be visible and select the 'Celulares y accesorios' department
             # This is to ensure that the search results are filtered to the correct category
@@ -187,14 +154,26 @@ class AmazonAsinScraper(BaseAmazonScraper):
 
         return False
 
-    def asins_scrape(self, brand: str, data: list):
+    def _asins_scrape(self, brand: str, data: list):
         """Method to scrape ASINs from the search results."""
+
         logs = f"{self.colors['green']}Scraping {brand} ASINs.{self.colors['reset']}\n"
         asin_list = []
         count = 1
         color_count = 0
         analysed_count = 0
-        self.captchats()  # Handle any captcha or authentication issues
+        titles_filter = [
+            'funda', 'case', 'protector', 'cristal',
+            'glass', 'mica', 'cable', 'audífono',
+            'headphone', 'earphone', 'bolígrafo',
+            'cover', 'ipad', 'tablet', 'watch', 'band',
+            'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
+            'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
+            'computadora de bolsillo', 'galaxy book', 'carcasa', 'smarttag',
+            'E5783-230a'
+        ]
+
+        self._asin_captchats()  # Handle any captcha or authentication issues
         # Wait for the search results to load and find if the category is not empty
         try:
             WebDriverWait(self.driver, 1).until(
@@ -235,6 +214,13 @@ class AmazonAsinScraper(BaseAmazonScraper):
 
             # Iterate through the product items and collect their ASINs
             for item in items:
+
+                title_tag = items.find_element(By.TAG_NAME, "h2")
+                title = title_tag.text.lower()
+
+                if any(word in title for word in titles_filter):
+                    continue
+
                 analysed_count += 1
 
                 # Get the ASIN from the data-asin attribute
@@ -265,6 +251,7 @@ class AmazonAsinScraper(BaseAmazonScraper):
                     By.CLASS_NAME, "s-pagination-next")))
                 if "s-pagination-disabled" in next_page_button.get_attribute("class"):
                     break
+                self.current_link = next_page_button.get_attribute("href")
                 next_page_button.click()
             except TimeoutException:
                 logs += f"{self.colors['red']}[ERROR] No next page button found(exit).{self.colors['reset']}\n"
@@ -282,13 +269,3 @@ class AmazonAsinScraper(BaseAmazonScraper):
         # Remove duplicate ASINs and prepare the final response
         data.extend(list(set(asin_list)))
         sleep(4)  # Sleep to avoid overwhelming the server
-
-    def quit_driver(self):
-        try:
-            self.driver.quit()
-        except InvalidSessionIdException:
-            print(
-                f"{self.colors['red']}Driver session already closed.{self.colors['reset']}")
-        except Exception as e:
-            print(
-                f"{self.colors['red']}Error quitting driver: {e}{self.colors['reset']}")

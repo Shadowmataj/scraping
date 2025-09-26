@@ -8,26 +8,10 @@ from random import randint
 from time import sleep
 
 from .base_amazon_scraper import BaseAmazonScraper
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, InvalidSessionIdException
 from selenium.webdriver.support import expected_conditions as EC
-
-BRANDS = [
-    'samsung',
-    'apple',
-    'xiaomi',
-    'oppo',
-    'huawei',
-    'motorola',
-    'sony',
-    'nokia',
-    'cubot',
-    'google',
-    'nubia',
-    'zte'
-]
 
 
 class AmazonDataScraper(BaseAmazonScraper):
@@ -36,36 +20,24 @@ class AmazonDataScraper(BaseAmazonScraper):
     def __init__(self):
         """Initialize the scraper with a Selenium WebDriver instance."""
         super().__init__()
-        self.driver = self.create_driver()
-
-    @staticmethod
-    def create_driver() -> webdriver.Remote:
-        """Function to create and return a Selenium WebDriver instance."""
-        chrome_options = webdriver.ChromeOptions()
-        # chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-notifications")
-        chrome_options.add_argument("--incognito")
-        chrome_options.add_argument("--disable-extensions")
-        prefs = {
-            "profile.managed_default_content_settings.images": 2,
-        }
-        chrome_options.add_experimental_option("prefs", prefs)
-        chrome_options.add_experimental_option(name="detach", value=True)
-        driver = webdriver.Remote(
-            command_executor='http://localhost:4444/wd/hub',  # URL of the remote server
-            options=chrome_options
+        self.driver = self._create_driver(
+            "--disable-notifications",
+            "--incognito",
+            "--disable-extensions",
+            prefs={
+                "profile.managed_default_content_settings.images": 2,
+            },
+            detach=True
         )
-        driver.delete_all_cookies()
-        return driver
 
     def main_method(self, products: list, data: list) -> None:
         """Function to scrape data for a list of products."""
         for product in products:
-            self.scrap_products_data(
+            self._scrap_products_data(
                 asin=product, data=data)
-        self.quit_driver()
+        self._quit_driver()
 
-    def twister_scraper(self, asin: str) -> None:
+    def _twister_scraper(self, asin: str) -> None:
         """Function to scrape twister data for a product identified by its ASIN."""
         try:
             # Extract the twister container
@@ -109,9 +81,10 @@ class AmazonDataScraper(BaseAmazonScraper):
         except NoSuchElementException:
             return f'[{asin}] {self.colors["red"]}No Twister.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{self.colors["red"]}[ERROR] Twisters: {e} {self.colors["reset"]}")
+            print(
+                f"{self.colors["red"]}[ERROR] Twisters: {e} {self.colors["reset"]}")
 
-    def scrap_products_data(self, asin: str, data: list) -> None:
+    def _scrap_products_data(self, asin: str, data: list) -> None:
         """Function to scrape data for a single product identified by its ASIN."""
         forbidden_images = ['HomeCustomProduct', 'play-icon-overla']
         logs = ''
@@ -123,19 +96,8 @@ class AmazonDataScraper(BaseAmazonScraper):
             'celulares y smartphones desbloqueados'
         ]
 
-        titles_filter = [
-            'funda', 'case', 'protector', 'cristal',
-            'glass', 'mica', 'cable', 'audífono',
-            'headphone', 'earphone', 'bolígrafo',
-            'cover', 'ipad', 'tablet', 'watch', 'band',
-            'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
-            'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
-            'computadora de bolsillo', 'galaxy book', 'carcasa', 'smarttag',
-            'E5783-230a'
-        ]
-
         # Define the link to the product page
-        link = f"https://www.amazon.com.mx/dp/{asin}"
+        link = f"{self.amazon_url}/dp/{asin}"
 
         # Initialize the product dictionary with default values
         product = {
@@ -169,7 +131,8 @@ class AmazonDataScraper(BaseAmazonScraper):
         except TimeoutException:
             logs += f'[{asin}] {self.colors["red"]}No login form.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{self.colors["red"]}[ERROR] Auth: {e}{self.colors["reset"]}")
+            print(
+                f"{self.colors["red"]}[ERROR] Auth: {e}{self.colors["reset"]}")
 
         # Check if the product belongs to the celphone category
         try:
@@ -197,10 +160,6 @@ class AmazonDataScraper(BaseAmazonScraper):
                 EC.presence_of_element_located((By.ID, "productTitle")))
             if product_title.text == '':
                 raise NoSuchElementException('No title found.')
-            lower_title = product_title.text.lower()
-            if any(forbidden_title in lower_title for forbidden_title in titles_filter):
-                if 'bundle' not in lower_title:
-                    raise Exception('The item is not a celphone.')
             product["title"] = product_title.text  # Store the product title
             logs += f'[{asin}] {self.colors["green"]}Product title.{self.colors["reset"]}\n'
 
@@ -251,7 +210,8 @@ class AmazonDataScraper(BaseAmazonScraper):
 
             logs += f'[{asin}] {self.colors["red"]}No images.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{self.colors["red"]} [ERROR] Images: {e} {self.colors["reset"]}")
+            print(
+                f"{self.colors["red"]} [ERROR] Images: {e} {self.colors["reset"]}")
 
         # Product price
         try:
@@ -316,7 +276,7 @@ class AmazonDataScraper(BaseAmazonScraper):
                 f"{self.colors["red"]} [ERROR] Basis price: {e} {self.colors["reset"]}")
 
         # Product twister ASIN
-        twister = self.twister_scraper(asin=asin)
+        twister = self._twister_scraper(asin=asin)
         if isinstance(twister, tuple):
             twister_list, log = twister
             product["twister"] = twister_list
@@ -356,7 +316,7 @@ class AmazonDataScraper(BaseAmazonScraper):
                 # Check if the feature name matches any of the specified features
                 for specified_feature in specified_features.keys():
                     if specified_feature == feature_name:
-                        if specified_features[specified_feature] == "brand" and feature not in BRANDS:
+                        if specified_features[specified_feature] == "brand" and feature not in self.default_brands:
                             raise Exception("Not a specified brand.")
                         product[specified_features[specified_feature]] = feature
 
@@ -407,20 +367,11 @@ class AmazonDataScraper(BaseAmazonScraper):
         except NoSuchElementException:
             logs += f'[{asin}] {self.colors["red"]}No ranking.{self.colors["reset"]}\n'
         except Exception as e:
-            print(f"{self.colors["red"]} [ERROR] ranking: {e} {self.colors["reset"]}")
+            print(
+                f"{self.colors["red"]} [ERROR] ranking: {e} {self.colors["reset"]}")
 
         # Print the logs for debugging
         print(logs)
         del logs
 
         data.append(product)  # Append the product data to the list
-
-    def quit_driver(self):
-        try:
-            self.driver.quit()
-        except InvalidSessionIdException:
-            print(
-                f"{self.colors['red']}Driver session already closed.{self.colors['reset']}")
-        except Exception as e:
-            print(
-                f"{self.colors['red']}Error quitting driver: {e}{self.colors['reset']}")
