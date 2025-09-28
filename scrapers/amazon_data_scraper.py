@@ -328,11 +328,10 @@ class AmazonDataScraper(BaseAmazonScraper):
                 # Check if the feature name matches any of the specified features
                 for specified_feature in specified_features.keys():
                     if specified_feature == feature_name:
-                        if (
-                            specified_feature == "marca"
-                            and not any(default_brand in feature for default_brand in self.default_brands)
-                        ):
-                            raise Exception("Not a specified brand.")
+                        if specified_feature == "marca":
+                            if not any(default_brand in feature for default_brand in self.default_brands):
+                                raise Exception("Not a specified brand.")
+                            feature = feature.split(" ")[0]
                         product[specified_features[specified_feature]] = feature
 
             product_title_lower = product_title.text.lower()

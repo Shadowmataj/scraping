@@ -42,6 +42,7 @@ class AmazonTopScraper(BaseAmazonScraper):
             throttle = WebDriverWait(self.driver, 10).until(
                 EC.visibility_of_element_located((By.TAG_NAME, 'pre')))
             print("Throttle in the request has been raise.")
+            self._quit_driver()
             return []
         except TimeoutError:
             print("No throttle.")
@@ -64,25 +65,29 @@ class AmazonTopScraper(BaseAmazonScraper):
                 if new_height == last_height:
                     break
                 last_height = new_height
+            try:
+                top_elements = WebDriverWait(self.driver, 10).until(
+                    EC.visibility_of_all_elements_located((By.ID, 'gridItemRoot')))
 
-            top_elements = WebDriverWait(self.driver, 10).until(
-                EC.visibility_of_all_elements_located((By.ID, 'gridItemRoot')))
+                for top_element in top_elements:
+                    ranking_raw = int(top_element.find_element(
+                        By.CLASS_NAME, "zg-bdg-text").text.lower().replace("#", ""))
+                    top_element_span = top_element.find_elements(
+                        By.TAG_NAME, "span")
+                    top_element_div = top_element_span[1].find_element(
+                        By.TAG_NAME, "div")
+                    top_element_asin = top_element_div.get_attribute("id")
+                    top_elements_dict[top_element_asin] = ranking_raw
 
-            for top_element in top_elements:
-                ranking_raw = int(top_element.find_element(
-                    By.CLASS_NAME, "zg-bdg-text").text.lower().replace("#", ""))
-                top_element_span = top_element.find_elements(
-                    By.TAG_NAME, "span")
-                top_element_div = top_element_span[1].find_element(
-                    By.TAG_NAME, "div")
-                top_element_asin = top_element_div.get_attribute("id")
-                top_elements_dict[top_element_asin] = ranking_raw
-
-            next_page_button = self.driver.find_element(
-                By.CLASS_NAME, "a-last")
-            next_page_button_class = next_page_button.get_attribute("class")
-            if 'a-disabled' in next_page_button_class:
-                print("Cerrando driver...")
+                next_page_button = self.driver.find_element(
+                    By.CLASS_NAME, "a-last")
+                next_page_button_class = next_page_button.get_attribute("class")
+                if 'a-disabled' in next_page_button_class:
+                    print("Cerrando driver...")
+                    self._quit_driver()
+                    return top_elements_dict
+                next_page_button.click()
+            except (Exception, TimeoutException):
+                print("There has been an error during top 100 search (continue).")
                 self._quit_driver()
-                return top_elements_dict
-            next_page_button.click()
+                return[]

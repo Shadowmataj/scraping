@@ -13,16 +13,7 @@ class BaseAmazonScraper():
     """Base amazon scraper class"""
 
     def __init__(self):
-        self.colors = {
-            "red": "\033[91m",
-            "green": "\033[92m",
-            "yellow": "\033[93m",
-            "blue": "\033[94m",
-            "purple": "\033[95m",
-            "cyan": "\033[96m",
-            "white": "\033[97m",
-            "reset": '\033[0m'
-        }
+        self.colors = config["colors"]
         self.default_brands = config.get("brands") or [
             'samsung',
             'apple',
@@ -54,6 +45,9 @@ class BaseAmazonScraper():
             command_executor=self.selenium_url,  # URL of the remote server
             options=chrome_options
         )
+
+        driver.delete_all_cookies()
+
         return driver
 
     def _asin_captchats(self, url: str):
@@ -93,7 +87,8 @@ class BaseAmazonScraper():
         try:
             if hasattr(self, "driver") and self.driver:
                 self.driver.quit()
-                print(f"{self.colors["yellow"]}Driver cerrado.{self.colors["reset"]}")
+                print(
+                    f"{self.colors["yellow"]}Driver cerrado.{self.colors["reset"]}")
             else:
                 print("No hay driver para cerrar")
         except InvalidSessionIdException:

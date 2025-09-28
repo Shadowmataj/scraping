@@ -8,26 +8,17 @@ import os
 import requests
 import threading
 
+from getpass import getpass
 from time import sleep
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Type, TypeVar
 
 from config import config
+from custom_exceptions import TokenExpiredError, InvalidCredentials
 from .base_amazon_scraper import BaseAmazonScraper
 
 T = TypeVar("T", bound="BaseAmazonScraper")
-
-COLORS = {
-    "red": "\033[91m",
-    "green": "\033[92m",
-    "yellow": "\033[93m",
-    "blue": "\033[94m",
-    "purple": "\033[95m",
-    "cyan": "\033[96m",
-    "white": "\033[97m",
-    "reset": '\033[0m'
-}
 
 
 class AmazonScraperManager():
@@ -35,21 +26,15 @@ class AmazonScraperManager():
 
     def __init__(self, data_scraper: Type[T], asin_scraper: Type[T], top_scraper: Type[T]):
         """"""
-        self.email = os.getenv('EMAIL')
-        self.password = os.getenv('PASSWORD')
-        self.credentials = {
-            "email": config["email"],
-            "password": config["password"]
-        }
+        self.colors = config["colors"]
         self.ip = config["ip"]
         self.threads = os.cpu_count()
-        self.token = self._login()
-        self.header = {
-            "Authorization": f"Bearer {self.token}"
-        }
-        self.brands = config["brands"] = self._get_brands()
-        self.asins_to_update_list = self._get_asins()
-        self.products = []
+        self.token = str()
+        self.refresh_token = str()
+        self.header = dict()
+        self.brands = config["brands"] = list()
+        self.asins_to_update_list = list()
+        self.products = list()
         self.amazon_asin_scraper = data_scraper
         self.amazon_data_scraper = asin_scraper
         self.top_scraper = top_scraper
@@ -59,19 +44,55 @@ class AmazonScraperManager():
             endpoint: str,
             **options: dict) -> dict:
         """"""
-        options["url"] = f"{self.ip}{endpoint}"
-        response = func(**options)
-        return response.json()
+        while True:
+            options["url"] = f"{self.ip}{endpoint}"
+            response = func(**options)
 
-    def _login(self) -> str:
+            response_json = response.json()
+            if not response_json.get("error"):
+                return response_json
+
+            print(response_json)
+            if response_json["message"] == "The token has expired":
+                if self.refresh_token:
+                    self.token = self.refresh_token
+                    self.refresh_token = str()
+                    self.header["Authorization"] = f"Bearer {self.token}"
+                else:
+                    self.token = str()
+                    while not self.token:
+                        print("Login required:")
+                        email = input("Email: ")
+                        password = getpass("Password: ")
+                        try:
+                            self.login(email, password)
+
+                        except InvalidCredentials as e:
+                            print(
+                                f"{config["colors"]["red"]}{str(e)}{config["colors"]["reset"]}")
+                        sleep(3)
+                options["headers"] = self.header
+
+    def login(self, email: str, password: str) -> str:
         """"""
+        credentials = {
+            "email": email,
+            "password": password
+        }
         login_response = self._api_request(
             func=requests.post,
             endpoint="/api/login",
-            json=self.credentials
+            json=credentials
         )
 
-        return login_response["access_token"]
+        if not login_response.get("access_token"):
+            if login_response["status"] == "Unauthorized":
+                raise InvalidCredentials(f"{login_response["status"]}")
+        else:
+            self.token = login_response["access_token"]
+            self.refresh_token = login_response["refresh_token"]
+            self.header["Authorization"] = f"Bearer {self.token}"
+            print(f"{self.colors["green"]}Login success{self.colors["reset"]}")
 
     def _get_brands(self) -> list:
         """"""
@@ -94,6 +115,8 @@ class AmazonScraperManager():
         )
 
         if not brands_response.get("brands"):
+            print(
+                f"{self.colors["red"]}Using default brands.{self.colors["reset"]}")
             return brands
 
         api_brands = brands_response["brands"]
@@ -106,7 +129,25 @@ class AmazonScraperManager():
                 api_brands.remove(filter)
             except ValueError:
                 pass
+        for api_brand in api_brands:
+            api_brand = api_brand.split(" ")[0]
+
         return api_brands
+
+    def restore_brands(self):
+        self.brands = config["brands"] = self._get_brands()
+        print("The brands have been restored.")
+
+    def update_brands(self, new_brands: list) -> None:
+        self.brands = config["brands"] = new_brands
+        print(
+            f"{self.colors["purple"]}Brands have been updated.{self.colors["reset"]}")
+        sleep(2)
+
+    def set_credentials(self, token: str, refresh_token:str):
+        self.token = token
+        self.refresh_token = refresh_token
+        self.header["Authorization"] = f"Bearer {self.token}"
 
     def _get_asins(self) -> list:
         """"""
@@ -173,21 +214,17 @@ class AmazonScraperManager():
                                 data.extend(result)
                 except Exception as e:
                     print(
-                        f"{COLORS['red']}Error en scraper: {e}{COLORS["reset"]}")
+                        f"{self.colors['red']}Error en scraper: {e}{self.colors["reset"]}")
 
         # Return the scraped data
 
     def _start_scrapers(self) -> list:
         """Main function to start the scraping process."""
 
-        print("Starting top 100 products search.")
-        top_scraper = self.top_scraper()
-        top_100 = top_scraper.main_method()
-        print(f"Top elements found: {len(top_100)}")
-
         print(f"Searching for this brands:")
         for brand_to_search in self.brands:
-            print(f"{COLORS['blue']}{brand_to_search}{COLORS['reset']}")
+            print(
+                f"{self.colors['blue']}{brand_to_search}{self.colors['reset']}")
 
         # Start the ASIN scraper
         asins_by_brand = dict()
@@ -202,13 +239,14 @@ class AmazonScraperManager():
         for brand, asins in asins_by_brand.items():
             first_acc += len(asins)
 
-        print(f"Products found: {COLORS['blue']}{first_acc}{COLORS['reset']}.")
+        print(
+            f"Products found: {self.colors['blue']}{first_acc}{self.colors['reset']}.")
 
         # Append the ASINs to the data list
         final_dict = {}
         for brand, asins in asins_by_brand.items():
             print(
-                f"Processing {COLORS['blue']}{brand.title()}: {len(asins)}{COLORS['reset']} products...")
+                f"Processing {self.colors['blue']}{brand.title()}: {len(asins)}{self.colors['reset']} products...")
             products = list()
             self._scraper_process(
                 list_to_split=asins,
@@ -219,7 +257,7 @@ class AmazonScraperManager():
             final_dict[brand] = products
             sleep(8)  # Sleep to avoid overwhelming the server
             print(
-                f"{brand.title()} products processed: {COLORS['blue']}{len(products)}/{len(asins)}{COLORS['reset']}.")
+                f"{brand.title()} products processed: {self.colors['blue']}{len(products)}/{len(asins)}{self.colors['reset']}.")
 
         del asins_by_brand  # Clear the ASINs dictionary to free memory
 
@@ -228,7 +266,7 @@ class AmazonScraperManager():
             last_acc += len(asins)
         # Print the final results
         print(
-            f"Products scraped: {COLORS["blue"]}{last_acc}/{first_acc}{COLORS["reset"]}.")
+            f"Products scraped: {self.colors["blue"]}{last_acc}/{first_acc}{self.colors["reset"]}.")
 
         return final_dict
 
@@ -246,7 +284,7 @@ class AmazonScraperManager():
                 headers=self.header
             )
 
-            print(f"{COLORS['cyan']}{put_response}{COLORS['reset']}")
+            print(f"{self.colors['cyan']}{put_response}{self.colors['reset']}")
 
             pending_asins = put_response["to_create"]
             pending_list = []
@@ -262,4 +300,5 @@ class AmazonScraperManager():
                     json=pending_list,
                     headers=self.header
                 )
-                print(f"{COLORS["cyan"]}{post_response}{COLORS["reset"]}")
+                print(
+                    f"{self.colors["cyan"]}{post_response}{self.colors["reset"]}")

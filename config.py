@@ -4,10 +4,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 config = {
-    "email": os.getenv("EMAIL"),
-    "password": os.getenv("PASSWORD"),
     "ip": os.getenv("IP"),
     "selenium_url": os.getenv("SELENIUM_URL"),
     "amazon_url": os.getenv("A_URL"),
-    "amazon_top_url": os.getenv("A_TOP_URL") 
+    "amazon_top_url": os.getenv("A_TOP_URL"),
+    "colors": {
+        "red": "\033[91m",
+        "green": "\033[92m",
+        "yellow": "\033[93m",
+        "blue": "\033[94m",
+        "purple": "\033[95m",
+        "cyan": "\033[96m",
+        "white": "\033[97m",
+        "reset": '\033[0m'
+    },
+    "credentials": os.getenv("CREDENTIALS_PATH")
 }

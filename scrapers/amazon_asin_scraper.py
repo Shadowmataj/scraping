@@ -67,7 +67,7 @@ class AmazonAsinScraper(BaseAmazonScraper):
         # This is to search for the brand on Amazon
         try:
             # Wait for the search input field to be visible and enter the brand name
-            nav_var_input = WebDriverWait(self.driver, 1).until(
+            nav_var_input = WebDriverWait(self.driver, 10).until(
                 EC.visibility_of_element_located((By.ID, 'twotabsearchtextbox')))
 
             # Enter the brand name into the search input field
@@ -100,7 +100,7 @@ class AmazonAsinScraper(BaseAmazonScraper):
             for _ in range(len(brand_list)):
                 # Find the brands refinements section and click on the brand checkboxes
                 # This is to filter the search results by the specified brand
-                brands_refinements = WebDriverWait(self.driver, 1).until(
+                brands_refinements = WebDriverWait(self.driver, 10).until(
                     EC.visibility_of_element_located((By.ID, "brandsRefinements")))
                 # Find all the brand list items in the refinements section
                 a_list_item = brands_refinements.find_elements(
@@ -135,7 +135,7 @@ class AmazonAsinScraper(BaseAmazonScraper):
         try:
             # Wait for the departments section to be visible and select the 'Celulares y accesorios' department
             # This is to ensure that the search results are filtered to the correct category
-            departments = WebDriverWait(self.driver, 1).until(
+            departments = WebDriverWait(self.driver, 10).until(
                 EC.visibility_of_element_located((By.ID, "departments")))
 
             # Find all the department options and click on the 'Celulares y accesorios' option
