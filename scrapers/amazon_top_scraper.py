@@ -17,7 +17,6 @@ from selenium.common.exceptions import (
 )
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
 
 
 class AmazonTopScraper(BaseAmazonScraper):
@@ -37,23 +36,53 @@ class AmazonTopScraper(BaseAmazonScraper):
         url = f"{self.amazon_url}/{self.amazon_top_url}"
         self.driver.get(url)
 
+        self._asin_captchats(url=self.amazon_url)
+
+        try:
+            throttle = WebDriverWait(self.driver, 10).until(
+                EC.visibility_of_element_located((By.TAG_NAME, 'pre')))
+            print("Throttle in the request has been raise.")
+            return []
+        except TimeoutError:
+            print("No throttle.")
+        except Exception:
+            pass
+
         top_elements_dict = dict()
         while True:
-            top_elements = WebDriverWait(self.driver, 4).until(
+
+            last_height = self.driver.execute_script(
+                "return document.body.scrollHeight")
+
+            while True:
+                self.driver.execute_script(
+                    f"window.scrollTo({last_height}, document.body.scrollHeight);")
+                sleep(2)
+
+                new_height = self.driver.execute_script(
+                    "return document.body.scrollHeight")
+                if new_height == last_height:
+                    break
+                last_height = new_height
+
+            top_elements = WebDriverWait(self.driver, 10).until(
                 EC.visibility_of_all_elements_located((By.ID, 'gridItemRoot')))
 
             for top_element in top_elements:
-                ranking_raw = int(self.driver.find_element(
+                ranking_raw = int(top_element.find_element(
                     By.CLASS_NAME, "zg-bdg-text").text.lower().replace("#", ""))
-                top_element_span = top_element.find_element(
+                top_element_span = top_element.find_elements(
                     By.TAG_NAME, "span")
-                top_element_div = top_element_span.find_element(
+                top_element_div = top_element_span[1].find_element(
                     By.TAG_NAME, "div")
                 top_element_asin = top_element_div.get_attribute("id")
                 top_elements_dict[top_element_asin] = ranking_raw
 
-            next_page_button = self.driver.find_element(By.CLASS_NAME, "a-last")
+            next_page_button = self.driver.find_element(
+                By.CLASS_NAME, "a-last")
             next_page_button_class = next_page_button.get_attribute("class")
             if 'a-disabled' in next_page_button_class:
+                print("Cerrando driver...")
+                self._quit_driver()
                 return top_elements_dict
             next_page_button.click()

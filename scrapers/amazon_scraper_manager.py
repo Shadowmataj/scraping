@@ -6,10 +6,11 @@ It initializes the scrapers, processes the product data, and saves the results t
 
 import os
 import requests
+import threading
 
 from time import sleep
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Type, TypeVar
 
 from config import config
@@ -32,7 +33,7 @@ COLORS = {
 class AmazonScraperManager():
     """Manager class"""
 
-    def __init__(self, data_scraper: Type[T], asin_scraper: Type[T]):
+    def __init__(self, data_scraper: Type[T], asin_scraper: Type[T], top_scraper: Type[T]):
         """"""
         self.email = os.getenv('EMAIL')
         self.password = os.getenv('PASSWORD')
@@ -46,11 +47,12 @@ class AmazonScraperManager():
         self.header = {
             "Authorization": f"Bearer {self.token}"
         }
-        self.brands = self._get_brands()
+        self.brands = config["brands"] = self._get_brands()
         self.asins_to_update_list = self._get_asins()
         self.products = []
         self.amazon_asin_scraper = data_scraper
         self.amazon_data_scraper = asin_scraper
+        self.top_scraper = top_scraper
 
     def _api_request(
         self, func: Callable[..., requests.Response],
@@ -74,18 +76,15 @@ class AmazonScraperManager():
     def _get_brands(self) -> list:
         """"""
         brands = [
-            'samsung',
-            'apple',
-            'xiaomi',
-            'oppo',
-            'huawei',
-            'motorola',
-            'sony',
-            'nokia',
-            'cubot',
-            'google',
-            'nubia',
-            'zte'
+            'samsung', 'apple', 'xiaomi', 'oppo',
+            'huawei', 'motorola', 'sony', 'nokia',
+            'cubot', 'google', 'nubia', 'zte'
+        ]
+
+        brands_filter = [
+            None,
+            '',
+            "generic"
         ]
 
         brands_response = self._api_request(
@@ -94,16 +93,23 @@ class AmazonScraperManager():
             headers=self.header
         )
 
-        if brands_response.get("brands"):
-            return brands_response["brands"]
+        if not brands_response.get("brands"):
+            return brands
 
-        return brands
+        api_brands = brands_response["brands"]
+
+        if not len(api_brands):
+            return brands
+
+        for filter in brands_filter:
+            try:
+                api_brands.remove(filter)
+            except ValueError:
+                pass
+        return api_brands
 
     def _get_asins(self) -> list:
         """"""
-        options = {
-            "headers": self.header
-        }
         asins_response = self._api_request(
             func=requests.get,
             endpoint="/api/products/amazon/id",
@@ -122,7 +128,7 @@ class AmazonScraperManager():
         """Function to process the ASINs using multiple threads.
         It initializes the AmazonAsinScraper for each thread and scrapes the ASINs"""
 
-        scrapers_list = []
+        scrapers_list = list()
 
         # Check if the products list is empty
         items = len(list_to_split) // self.threads
@@ -133,13 +139,13 @@ class AmazonScraperManager():
             workers = self.threads
 
         # Create scrapers
-        for _ in range(workers):
+        for lap in range(workers):
             scraper_instance = scraper_class()
             scrapers_list.append(scraper_instance)
 
-        executor_list = []
         # Use ThreadPoolExecutor to manage threads
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
+            executor_list = []
             step = 0
             for scraper in scrapers_list:
                 start = step
@@ -148,23 +154,38 @@ class AmazonScraperManager():
                     step += 1
                     difference_count -= 1
 
-                brands_list = list_to_split[start:step]
+                splited_list = list_to_split[start:step]
                 executor_list.append(
                     executor.submit(scraper.main_method,
-                                    brands_list, data)
+                                    splited_list)
                 )
-        # Wait for all threads to complete
-        for _ in executor_list:
-            pass
+            # Wait for all threads to complete
+            lock = threading.Lock()
+            for future in as_completed(executor_list):
+                try:
+                    result = future.result()
+                    if result:
+                        with lock:
+                            if isinstance(data, dict):
+                                for key, value in result.items():
+                                    data[key] = value
+                            elif isinstance(data, list):
+                                data.extend(result)
+                except Exception as e:
+                    print(
+                        f"{COLORS['red']}Error en scraper: {e}{COLORS["reset"]}")
 
         # Return the scraped data
-        return data
 
     def _start_scrapers(self) -> list:
         """Main function to start the scraping process."""
-        # Main execution starts here
-        print(
-            f"Searching for this brands:")
+
+        print("Starting top 100 products search.")
+        top_scraper = self.top_scraper()
+        top_100 = top_scraper.main_method()
+        print(f"Top elements found: {len(top_100)}")
+
+        print(f"Searching for this brands:")
         for brand_to_search in self.brands:
             print(f"{COLORS['blue']}{brand_to_search}{COLORS['reset']}")
 
@@ -175,8 +196,6 @@ class AmazonScraperManager():
             scraper_class=self.amazon_asin_scraper,
             data=asins_by_brand
         )  # Scrape ASINs
-
-        sleep(8)  # Sleep to avoid overwhelming the server
 
         # Prints the number of products found
         first_acc = 0
@@ -220,16 +239,16 @@ class AmazonScraperManager():
 
         for key, value in products_dict.items():
 
-            post_response = self._api_request(
+            put_response = self._api_request(
                 func=requests.put,
                 endpoint="/api/products/amazon",
                 json=value,
                 headers=self.header
             )
 
-            print(post_response)
+            print(f"{COLORS['cyan']}{put_response}{COLORS['reset']}")
 
-            pending_asins = post_response["to_create"]
+            pending_asins = put_response["to_create"]
             pending_list = []
 
             if len(pending_asins):
@@ -243,3 +262,4 @@ class AmazonScraperManager():
                     json=pending_list,
                     headers=self.header
                 )
+                print(f"{COLORS["cyan"]}{post_response}{COLORS["reset"]}")

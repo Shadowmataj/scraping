@@ -10,7 +10,7 @@ from time import sleep
 from .base_amazon_scraper import BaseAmazonScraper
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, InvalidSessionIdException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 
 
@@ -30,12 +30,14 @@ class AmazonDataScraper(BaseAmazonScraper):
             detach=True
         )
 
-    def main_method(self, products: list, data: list) -> None:
+    def main_method(self, products: list) -> list:
         """Function to scrape data for a list of products."""
+        data = list()
         for product in products:
             self._scrap_products_data(
                 asin=product, data=data)
         self._quit_driver()
+        return data
 
     def _twister_scraper(self, asin: str) -> None:
         """Function to scrape twister data for a product identified by its ASIN."""
@@ -104,6 +106,7 @@ class AmazonDataScraper(BaseAmazonScraper):
             "asin": asin,
             "price": 0,
             "url": link,
+            "brand": "",
             "images": []
         }
         self.driver.get(link)
@@ -151,6 +154,7 @@ class AmazonDataScraper(BaseAmazonScraper):
             logs += f'[{asin}] {self.colors["red"]}Not a celphone.{self.colors["reset"]}\n'
             print(logs)
             del logs
+            del product
             return
 
         # Scrape product details
@@ -165,14 +169,21 @@ class AmazonDataScraper(BaseAmazonScraper):
 
         except TimeoutException:
             logs += f'[{asin}] {self.colors["red"]}No load.{self.colors["reset"]}\n'
+            print(logs)
+            del logs
+            del product
             return
         except NoSuchElementException:
             logs += f'[{asin}] {self.colors["red"]}Not a celphone.{self.colors["reset"]}\n'
+            print(logs)
+            del logs
+            del product
             return
         except Exception as e:
             logs += f'[{asin}] {self.colors["red"]}Not a celphone.{self.colors["reset"]}\n'
             print(logs)
             del logs
+            del product
             return
 
         # Product images
@@ -238,6 +249,7 @@ class AmazonDataScraper(BaseAmazonScraper):
             logs += f'[{asin}] {self.colors["red"]}Price under point price.{self.colors["reset"]}\n'
             print(logs)
             del logs
+            del product
             return
 
         # Basis price and saving percentage
@@ -316,17 +328,53 @@ class AmazonDataScraper(BaseAmazonScraper):
                 # Check if the feature name matches any of the specified features
                 for specified_feature in specified_features.keys():
                     if specified_feature == feature_name:
-                        if specified_features[specified_feature] == "brand" and feature not in self.default_brands:
+                        if (
+                            specified_feature == "marca"
+                            and not any(default_brand in feature for default_brand in self.default_brands)
+                        ):
                             raise Exception("Not a specified brand.")
                         product[specified_features[specified_feature]] = feature
 
+            product_title_lower = product_title.text.lower()
+            if product["brand"] == "":
+                if "iphone" in product_title_lower:
+                    product["brand"] = "apple"
+                elif "poco" in product_title_lower:
+                    product["brand"] = "xiaomi"
+                else:
+                    for default_brand in self.default_brands:
+                        if default_brand in product_title_lower:
+                            product["brand"] = default_brand
+                            break
+
+            if product["brand"] == "":
+                print("Aún sin marca")
+                raise Exception("Not a specified brand.")
+
             logs += f'[{asin}] {self.colors["green"]}Product overview.{self.colors["reset"]}\n'
+
         except NoSuchElementException:
+            product_title_lower = product_title.text.lower()
+            if product["brand"] == "":
+                if "iphone" in product_title_lower:
+                    product["brand"] = "apple"
+                elif "poco" in product_title_lower:
+                    product["brand"] = "xiaomi"
+                else:
+                    for default_brand in self.default_brands:
+                        if default_brand in product_title_lower:
+                            product["brand"] = default_brand
+                            break
+            if product["brand"] == "":
+                print("Aún sin marca")
+                raise Exception("Not a specified brand.")
+
             logs += f'[{asin}] {self.colors["red"]}No product overview.{self.colors["reset"]}\n'
         except Exception as e:
-            logs += f'[{asin}] {self.colors["red"]}Not a scpecified brand.{self.colors["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}Not a specified brand.{self.colors["reset"]}\n'
             print(logs)
             del logs
+            del product
             return
 
         # Product ranking

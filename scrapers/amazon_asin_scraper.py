@@ -26,39 +26,42 @@ class AmazonAsinScraper(BaseAmazonScraper):
         super().__init__()
         self.driver = self._create_driver(
             "--start-fullscreen",
-            "--incognito",
+            "--incognito"
         )
+        self.current_link = ""
 
-    def main_method(self, brand_list: list, asins_dict: dict):
+    def main_method(self, brand_list: list) -> dict:
         """Main method to start the scraping process for a given brand."""
+        asins_dict = dict()
 
         categories = [
             'banda ancha móvil',
             'celulares y smartphones de prepago',
             'celulares y smartphones desbloqueados'
         ]
+
         for brand in brand_list:
             # Initialize the data list for the brand
             data = []
             self.driver.get(self.amazon_url)
             self._brand_search(brand)
             self._brand_filtering(brand)
-            self._category_filtering(category='celulares y accesorios')
+            self._category_filtering(brand=brand)
             main_page = self.driver.current_url
             for category in categories:
-                if self._category_filtering(category=category):
+                if self._category_filtering(brand=brand, category=category):
                     self._asins_scrape(brand, data)
                     self.driver.get(main_page)
             asins_dict[brand] = data
-            sleep(2)
             self._quit_driver()
+        return asins_dict
 
     def _brand_search(self, brand: str):
         """Method to search for the brand on Amazon."""
 
         logs = f"{self.colors['green']}Searching for brand: {brand}.{self.colors['reset']}\n"
-
-        self._asin_captchats()  # Handle any captcha or authentication issues
+        # Handle any captcha or authentication issues
+        self._asin_captchats(url=self.amazon_url)
 
         # Find the search input field and enter the brand name
         # This is to search for the brand on Amazon
@@ -89,10 +92,10 @@ class AmazonAsinScraper(BaseAmazonScraper):
     def _brand_filtering(self, brand: str):
         """Method to filter the search results by brand."""
 
+        self._asin_captchats(url=self.amazon_url)
+
         logs = f"{self.colors['green']}Filtering by brand: {brand}.{self.colors['reset']}\n"
         brand_list = brand.split(" ")
-
-        self._asin_captchats()  # Handle any captcha or authentication issues
         try:
             for _ in range(len(brand_list)):
                 # Find the brands refinements section and click on the brand checkboxes
@@ -123,11 +126,12 @@ class AmazonAsinScraper(BaseAmazonScraper):
         print(logs)  # Print logs for debugging
         del logs  # Clear logs after printing
 
-    def _category_filtering(self, category: str = 'Celulares y accesorios') -> bool:
+    def _category_filtering(self, brand:str, category: str = 'celulares y accesorios') -> bool:
         """Method to filter the search results by category."""
 
-        logs = f"{self.colors['green']}Filtering by category: {category}.{self.colors['reset']}\n"
-        self._asin_captchats()  # Handle any captcha or authentication issues
+        self._asin_captchats(url=self.amazon_url)
+
+        logs = f"{self.colors['green']}Filtering {brand} by category: {category}.{self.colors['reset']}\n"
         try:
             # Wait for the departments section to be visible and select the 'Celulares y accesorios' department
             # This is to ensure that the search results are filtered to the correct category
@@ -164,16 +168,16 @@ class AmazonAsinScraper(BaseAmazonScraper):
         analysed_count = 0
         titles_filter = [
             'funda', 'case', 'protector', 'cristal',
-            'glass', 'mica', 'cable', 'audífono',
+            'glass', 'mica', 'cable', 'audífono', 'galaxy tab'
             'headphone', 'earphone', 'bolígrafo',
             'cover', 'ipad', 'tablet', 'watch', 'band',
             'laptop', 'notebook', 'macbook', 'plan', 'cabezal',
             'hotspot', 'router', 'fit3', 'SmartTag', 'sobremesa', 'HUAWEI 4G',
             'computadora de bolsillo', 'galaxy book', 'carcasa', 'smarttag',
-            'E5783-230a'
+            '(E5783-230a)', 'udio DRC-15PF', 'ME993LLA', 'Guía Completa DA61-00524A'
         ]
-
-        self._asin_captchats()  # Handle any captcha or authentication issues
+        # Handle any captcha or authentication issues
+        self._asin_captchats(url=self.amazon_url)
         # Wait for the search results to load and find if the category is not empty
         try:
             WebDriverWait(self.driver, 1).until(
@@ -215,7 +219,7 @@ class AmazonAsinScraper(BaseAmazonScraper):
             # Iterate through the product items and collect their ASINs
             for item in items:
 
-                title_tag = items.find_element(By.TAG_NAME, "h2")
+                title_tag = item.find_element(By.TAG_NAME, "h2")
                 title = title_tag.text.lower()
 
                 if any(word in title for word in titles_filter):
@@ -229,13 +233,13 @@ class AmazonAsinScraper(BaseAmazonScraper):
                 # If the ASIN is valid, add it to the list
                 if data_asin != '':
                     # Check for color variations of the product
-                    self.colors = item.find_elements(
+                    colors = item.find_elements(
                         By.CLASS_NAME, "s-color-swatch-pad")
 
                     # If color variations exist, add their ASINs as well
-                    if len(self.colors):
+                    if len(colors):
                         color_count += 1
-                        for color in self.colors:
+                        for color in colors:
                             color_link = color.find_element(
                                 By.TAG_NAME, "div").get_attribute("data-csa-c-swatch-url")
                             color_asin = color_link.split("/")[3]

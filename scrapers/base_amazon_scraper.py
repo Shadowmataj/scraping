@@ -23,7 +23,7 @@ class BaseAmazonScraper():
             "white": "\033[97m",
             "reset": '\033[0m'
         }
-        self.default_brands = BRANDS = [
+        self.default_brands = config.get("brands") or [
             'samsung',
             'apple',
             'xiaomi',
@@ -39,19 +39,16 @@ class BaseAmazonScraper():
         ]
         self.selenium_url = config["selenium_url"]
         self.amazon_url = config["amazon_url"]
-        self.current_url = ""
 
     def _create_driver(self, *arguments: str, **kwargs: dict | bool) -> webdriver.Remote:
         """Function to create and return a Selenium WebDriver instance."""
         chrome_options = webdriver.ChromeOptions()
 
-        if arguments:
-            for argument in arguments:
-                chrome_options.add_argument(argument)
+        for argument in arguments:
+            chrome_options.add_argument(argument)
 
-        if kwargs:
-            for key, value in kwargs.items():
-                chrome_options.add_experimental_option(name=key, value=value)
+        for key, value in kwargs.items():
+            chrome_options.add_experimental_option(name=key, value=value)
 
         driver = webdriver.Remote(
             command_executor=self.selenium_url,  # URL of the remote server
@@ -82,7 +79,7 @@ class BaseAmazonScraper():
         try:
             WebDriverWait(self.driver, 1).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "auth-workflow")))
-            self.driver.get(self.current_url)
+            self.driver.get(url)
             logs += f"{self.colors['green']}Authentication workflow completed successfully.{self.colors['reset']}\n"
         except TimeoutException:
             logs += f"{self.colors['green']}Authentication workflow not found.{self.colors['reset']}\n"
@@ -94,7 +91,11 @@ class BaseAmazonScraper():
 
     def _quit_driver(self):
         try:
-            self.driver.quit()
+            if hasattr(self, "driver") and self.driver:
+                self.driver.quit()
+                print(f"{self.colors["yellow"]}Driver cerrado.{self.colors["reset"]}")
+            else:
+                print("No hay driver para cerrar")
         except InvalidSessionIdException:
             print(
                 f"{self.colors['red']}Driver session already closed.{self.colors['reset']}")
