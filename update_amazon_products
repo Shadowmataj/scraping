@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+reset=$(tput sgr0)
+
+cleanup(){
+        clear
+        echo "Bash message: ${red}Closing program...${reset}"
+        docker compose down
+        echo "Bash message: ${red}Finishing script.${reset}"
+        exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
+cd /home/christian-mata/Desktop/tech_hunter/amazon_scraping || exit 1
+clear
+echo "Bash message: ${green}Starting necesary containers:${reset}"
+
+docker compose -f ./docker-compose.yaml up -d
+
+sleep 3
+
+clear
+
+echo "Bash message: ${green}Starting main program.${reset}"
+
+source .venv/bin/activate
+
+python main.py
+
+# clear
+
+echo "Bash message: ${green}Closing containers.${reset}"
+
+docker compose down
+
+deactivate
+
+echo "Bash message: ${green}Finishing script.${reset}"
+
+exit 0
