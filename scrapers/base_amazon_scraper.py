@@ -1,4 +1,7 @@
-"""Base Amazon Scraper"""
+"""Base Amazon Scraper Module
+This module contains the base class for Amazon scrapers using Selenium WebDriver.
+It provides methods to create a WebDriver instance, handle captchas, and quit the driver.
+"""
 
 from selenium import webdriver
 from config import config

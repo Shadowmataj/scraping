@@ -5,6 +5,7 @@ red=$(tput setaf 1)
 green=$(tput setaf 2)
 reset=$(tput sgr0)
 
+# Function to handle cleanup on exit
 cleanup(){
         clear
         echo "Bash message: ${red}Closing program...${reset}"
@@ -13,8 +14,10 @@ cleanup(){
         exit 0
 }
 
+# Set trap to catch SIGINT and SIGTERM signals and call cleanup function
 trap cleanup SIGINT SIGTERM
 
+# Navigate to the project directory
 cd /home/christian-mata/Desktop/tech_hunter/amazon_scraping || exit 1
 clear
 echo "Bash message: ${green}Starting necesary containers:${reset}"
@@ -31,7 +34,7 @@ source .venv/bin/activate
 
 python main.py
 
-# clear
+clear
 
 echo "Bash message: ${green}Closing containers.${reset}"
 

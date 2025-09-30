@@ -25,7 +25,7 @@ class AmazonScraperManager():
     """Manager class"""
 
     def __init__(self, data_scraper: Type[T], asin_scraper: Type[T], top_scraper: Type[T]):
-        """"""
+        """Initialize the AmazonScraperManager with configuration settings."""
         self.colors = config["colors"]
         self.ip = config["ip"]
         self.threads = os.cpu_count()
@@ -43,7 +43,7 @@ class AmazonScraperManager():
         self, func: Callable[..., requests.Response],
             endpoint: str,
             **options: dict) -> dict:
-        """"""
+        """Make a request to the API. Handle token expiration and re-authentication."""
         while True:
             options["url"] = f"{self.ip}{endpoint}"
             response = func(**options)
@@ -74,7 +74,7 @@ class AmazonScraperManager():
                 options["headers"] = self.header
 
     def login(self, email: str, password: str) -> str:
-        """"""
+        """Log in to the API and retrieve an access token."""
         credentials = {
             "email": email,
             "password": password
@@ -95,7 +95,7 @@ class AmazonScraperManager():
             print(f"{self.colors["green"]}Login success{self.colors["reset"]}")
 
     def _get_brands(self) -> list:
-        """"""
+        """Get the list of brands."""
         brands = [
             'samsung', 'apple', 'xiaomi', 'oppo',
             'huawei', 'motorola', 'sony', 'nokia',
@@ -150,7 +150,7 @@ class AmazonScraperManager():
         self.header["Authorization"] = f"Bearer {self.token}"
 
     def _get_asins(self) -> list:
-        """"""
+        """Get the list of ASINs."""
         asins_response = self._api_request(
             func=requests.get,
             endpoint="/api/products/amazon/id",
@@ -271,7 +271,7 @@ class AmazonScraperManager():
         return final_dict
 
     def main(self) -> None:
-        """"""
+        """Main entry point for the scraper manager. It handles the login, scraping process, and saving the results."""
 
         products_dict = self._start_scrapers()
 

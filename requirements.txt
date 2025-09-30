@@ -1,3 +1,4 @@
+"""amazon_scraping requirements file."""
 selenium
 requests
 bs4

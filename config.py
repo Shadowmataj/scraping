@@ -1,3 +1,8 @@
+"""Configuration Module
+This module loads environment variables from a .env file and provides configuration settings
+for the application, including IP address, Selenium server URL, Amazon URLs, and color codes.
+"""
+
 import os
 from dotenv import load_dotenv
 

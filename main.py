@@ -1,4 +1,8 @@
-"""Main function for the scraper process."""
+"""Main module for Amazon scraping application.
+This module serves as the entry point for the Amazon scraping application. It initializes the
+AmazonScraperManager with specific scraper classes and provides a menu-driven interface
+for users to log in, manage tokens, and perform scraping tasks.
+"""
 import sys
 import os
 import json
