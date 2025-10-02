@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Type, TypeVar
 
 from config import config
-from custom_exceptions import TokenExpiredError, InvalidCredentials
+from custom_exceptions import InvalidCredentials
 from .base_amazon_scraper import BaseAmazonScraper
 
 T = TypeVar("T", bound="BaseAmazonScraper")
@@ -26,18 +26,18 @@ class AmazonScraperManager():
 
     def __init__(self, data_scraper: Type[T], asin_scraper: Type[T], top_scraper: Type[T]):
         """Initialize the AmazonScraperManager with configuration settings."""
-        self.colors = config["colors"]
-        self.ip = config["ip"]
-        self.threads = os.cpu_count()
-        self.token = str()
-        self.refresh_token = str()
-        self.header = dict()
-        self.brands = config["brands"] = list()
-        self.asins_to_update_list = list()
-        self.products = list()
-        self.amazon_asin_scraper = data_scraper
-        self.amazon_data_scraper = asin_scraper
-        self.top_scraper = top_scraper
+        self.colors: dict = config["colors"]
+        self.ip: str = config["ip"]
+        self.threads: int = os.cpu_count()
+        self.token: str = str()
+        self.refresh_token: str = str()
+        self.header: dict = dict()
+        self.brands: list = config["brands"]
+        self.asins_to_update_list: list = list()
+        self.products: list = list()
+        self.amazon_asin_scraper: Type[T] = data_scraper
+        self.amazon_data_scraper: Type[T] = asin_scraper
+        self.top_scraper: Type[T] = top_scraper
 
     def _api_request(
         self, func: Callable[..., requests.Response],
@@ -51,9 +51,14 @@ class AmazonScraperManager():
             response_json = response.json()
             if not response_json.get("error"):
                 return response_json
-
-            print(response_json)
-            if response_json["message"] == "The token has expired":
+            
+            messages = [
+                "Signature verification failed.",
+                "The token has expired",
+                "Token not provided"
+            ]
+            if response_json["message"] in messages:
+                {'error': 'invalid_token', 'message': 'Signature verification failed.'}
                 if self.refresh_token:
                     self.token = self.refresh_token
                     self.refresh_token = str()
@@ -144,7 +149,7 @@ class AmazonScraperManager():
             f"{self.colors["purple"]}Brands have been updated.{self.colors["reset"]}")
         sleep(2)
 
-    def set_credentials(self, token: str, refresh_token:str):
+    def set_credentials(self, token: str, refresh_token: str):
         self.token = token
         self.refresh_token = refresh_token
         self.header["Authorization"] = f"Bearer {self.token}"
@@ -185,36 +190,50 @@ class AmazonScraperManager():
             scrapers_list.append(scraper_instance)
 
         # Use ThreadPoolExecutor to manage threads
-        with ThreadPoolExecutor(max_workers=self.threads) as executor:
-            executor_list = []
-            step = 0
-            for scraper in scrapers_list:
-                start = step
-                step = start + items
-                if difference_count > 0:
-                    step += 1
-                    difference_count -= 1
+        try:
+            with ThreadPoolExecutor(max_workers=self.threads) as executor:
+                executor_list = []
+                step = 0
+                for scraper in scrapers_list:
+                    start = step
+                    step = start + items
+                    if difference_count > 0:
+                        step += 1
+                        difference_count -= 1
 
-                splited_list = list_to_split[start:step]
-                executor_list.append(
-                    executor.submit(scraper.main_method,
-                                    splited_list)
-                )
-            # Wait for all threads to complete
-            lock = threading.Lock()
-            for future in as_completed(executor_list):
-                try:
-                    result = future.result()
-                    if result:
-                        with lock:
-                            if isinstance(data, dict):
-                                for key, value in result.items():
-                                    data[key] = value
-                            elif isinstance(data, list):
-                                data.extend(result)
-                except Exception as e:
-                    print(
-                        f"{self.colors['red']}Error en scraper: {e}{self.colors["reset"]}")
+                    splited_list = list_to_split[start:step]
+                    executor_list.append(
+                        executor.submit(scraper.main_method,
+                                        splited_list)
+                    )
+                # Wait for all threads to complete
+                lock = threading.Lock()
+                for future in as_completed(executor_list):
+                    try:
+                        result = future.result()
+                        if result:
+                            with lock:
+                                if isinstance(data, dict):
+                                    for key, value in result.items():
+                                        data[key] = value
+                                elif isinstance(data, list):
+                                    data.extend(result)
+                    except Exception as e:
+                        print(
+                            f"{self.colors['red']}Error en scraper: {e}{self.colors["reset"]}")
+        except KeyboardInterrupt:
+            print(
+                f"{self.colors['red']}Process interrupted by user.{self.colors['reset']}")
+            executor.shutdown(wait=False, cancel_futures=True)
+            print(f"{self.colors['red']}Shutting down scrapers...{self.colors['reset']}")
+            
+            print(
+                f"{self.colors['red']}All scrapers have been closed.{self.colors['reset']}")
+            raise KeyboardInterrupt
+
+        except Exception as e:
+            print(
+                f"{self.colors['red']}ThreadPoolExecutor error: {e}{self.colors['reset']}")
 
         # Return the scraped data
 

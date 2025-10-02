@@ -23,5 +23,6 @@ config = {
         "white": "\033[97m",
         "reset": '\033[0m'
     },
+    "brands": [],
     "credentials": os.getenv("CREDENTIALS_PATH")
 }
