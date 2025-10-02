@@ -1,6 +1,6 @@
 # Amazon Scraper Project
 
-This project is designed to scrape data from Amazon. It uses a Selenium Grid setup with Docker to run the scrapers in a distributed and scalable manner.
+This project is designed to scrape data. It uses a Selenium Grid setup with Docker to run the scrapers in a distributed and scalable manner.
 
 ## Requirements
 
@@ -75,6 +75,6 @@ graph TD
         E -- Creates and runs --> F[Amazon Scrapers];
     end
 
-    F -- Interact with --> G[Amazon Website];
+    F -- Interact with --> G[Website];
     F -- Run on --> A;
 ```
