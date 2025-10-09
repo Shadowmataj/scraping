@@ -21,14 +21,15 @@ from selenium.webdriver.common.keys import Keys
 class AmazonAsinScraper(BaseAmazonScraper):
     """Main Amazon ASIN scraper class for scraping product data based on brand."""
 
-    def __init__(self):
+    def __init__(self, asins_to_update: list) -> None:
         """Initialize the scraper with a Selenium WebDriver instance."""
         super().__init__()
         self.driver = self._create_driver(
             "--start-fullscreen",
             "--incognito"
-        )
+        )   
         self.current_link = ""
+        self.asins_to_update_list = asins_to_update
 
     def main_method(self, brand_list: list) -> dict:
         """Main method to start the scraping process for a given brand."""
@@ -218,6 +219,10 @@ class AmazonAsinScraper(BaseAmazonScraper):
 
             # Iterate through the product items and collect their ASINs
             for item in items:
+                # Get the ASIN from the data-asin attribute
+                data_asin = item.get_attribute("data-asin")
+                if data_asin in self.asins_to_update_list:
+                    continue
 
                 title_tag = item.find_element(By.TAG_NAME, "h2")
                 title = title_tag.text.lower()
@@ -227,8 +232,6 @@ class AmazonAsinScraper(BaseAmazonScraper):
 
                 analysed_count += 1
 
-                # Get the ASIN from the data-asin attribute
-                data_asin = item.get_attribute("data-asin")
 
                 # If the ASIN is valid, add it to the list
                 if data_asin != '':
@@ -266,10 +269,12 @@ class AmazonAsinScraper(BaseAmazonScraper):
             except Exception:
                 logs += f"{self.colors['red']}[ERROR] Error clicking next page (exit).{self.colors['reset']}\n"
                 break
-
+        
+        filtered_list = list(set(asin_list))
+        logs += f"{self.colors['green']}New products found: {len(filtered_list)}.{self.colors['reset']}\n"
         print(logs)
         del logs  # Clear logs after printing
 
         # Remove duplicate ASINs and prepare the final response
-        data.extend(list(set(asin_list)))
+        data.extend(filtered_list)
         sleep(4)  # Sleep to avoid overwhelming the server

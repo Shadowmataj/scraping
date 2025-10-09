@@ -237,16 +237,13 @@ class AmazonDataScraper(BaseAmazonScraper):
             final_price = float(
                 f"{product_price.text.replace(',', '')}.{product_price_fraction.text.replace('.', '')}")
 
-            if final_price < 601:
-                raise Exception("Price is under $601")
-
             product["price"] = final_price
 
             logs += f'[{asin}] {self.colors["green"]}Price.{self.colors["reset"]}\n'
         except NoSuchElementException:
             logs += f'[{asin}] {self.colors["red"]}No price.{self.colors["reset"]}\n'
         except Exception as e:
-            logs += f'[{asin}] {self.colors["red"]}Price under point price.{self.colors["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No price.{self.colors["reset"]}\n'
             print(logs)
             del logs
             del product

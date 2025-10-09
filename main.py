@@ -65,7 +65,7 @@ def menu(scraper: AmazonScraperManager, file: Path):
         print("Starting program...\n\n")
         print("Select an option: ")
         print("1.- Regular update.")
-        print("2.- Add a new brands.")
+        print("2.- Add a new brands or search or a specific brand.")
         print("3.- Exit.")
         option = int(input("Select an option: "))
 
@@ -73,6 +73,7 @@ def menu(scraper: AmazonScraperManager, file: Path):
             case 1:
                 print("Starting regular update procces, this may take a while...")
                 try:
+                    scraper.get_asins()
                     scraper.restore_brands()
                     scraper.main()
                 except TokenExpiredError as e:

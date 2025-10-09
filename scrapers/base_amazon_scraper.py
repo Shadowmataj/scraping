@@ -91,7 +91,7 @@ class BaseAmazonScraper():
             if hasattr(self, "driver") and self.driver:
                 self.driver.quit()
                 print(
-                    f"{self.colors["yellow"]}Driver cerrado.{self.colors["reset"]}")
+                    f"{self.colors['purple']}Driver cerrado.{self.colors['reset']}")
             else:
                 print("No hay driver para cerrar")
         except InvalidSessionIdException:

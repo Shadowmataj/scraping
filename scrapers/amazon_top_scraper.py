@@ -81,7 +81,8 @@ class AmazonTopScraper(BaseAmazonScraper):
 
                 next_page_button = self.driver.find_element(
                     By.CLASS_NAME, "a-last")
-                next_page_button_class = next_page_button.get_attribute("class")
+                next_page_button_class = next_page_button.get_attribute(
+                    "class")
                 if 'a-disabled' in next_page_button_class:
                     print("Cerrando driver...")
                     self._quit_driver()
@@ -90,4 +91,4 @@ class AmazonTopScraper(BaseAmazonScraper):
             except (Exception, TimeoutException):
                 print("There has been an error during top 100 search (continue).")
                 self._quit_driver()
-                return[]
+                return []
