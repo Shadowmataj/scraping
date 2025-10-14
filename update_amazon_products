@@ -34,7 +34,7 @@ source .venv/bin/activate
 
 python main.py
 
-clear
+#clear
 
 echo "Bash message: ${green}Closing containers.${reset}"
 

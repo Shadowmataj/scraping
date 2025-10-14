@@ -34,8 +34,13 @@ class AmazonDataScraper(BaseAmazonScraper):
         """Function to scrape data for a list of products."""
         data = list()
         for product in products:
-            self._scrap_products_data(
-                asin=product, data=data)
+            if isinstance(product, str):
+                self._scrap_products_data(
+                    asin=product, data=data)
+            elif isinstance(product, dict):
+                for asin in product.keys():
+                    self._scrap_products_data(
+                        asin=asin, data=data, ranking=product[asin])
         self._quit_driver()
         return data
 
@@ -86,7 +91,7 @@ class AmazonDataScraper(BaseAmazonScraper):
             print(
                 f"{self.colors["red"]}[ERROR] Twisters: {e} {self.colors["reset"]}")
 
-    def _scrap_products_data(self, asin: str, data: list) -> None:
+    def _scrap_products_data(self, asin: str, data: list, **kwargs: int) -> None:
         """Function to scrape data for a single product identified by its ASIN."""
         forbidden_images = ['HomeCustomProduct', 'play-icon-overla']
         logs = ''
@@ -107,7 +112,9 @@ class AmazonDataScraper(BaseAmazonScraper):
             "price": 0,
             "url": link,
             "brand": "",
-            "images": []
+            "image": "",
+            "ranking": kwargs.get("ranking", 0),
+
         }
         self.driver.get(link)
 
@@ -116,9 +123,8 @@ class AmazonDataScraper(BaseAmazonScraper):
             # Wait for the continue button to appear and click it
             continue_button = WebDriverWait(self.driver, randint(1, 4)).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "a-button-text")))
-            sleep(randint(2, 4))  # Sleep to avoid overwhelming the server
+            sleep(randint(1, 3))  # Sleep to avoid overwhelming the server
             continue_button.click()
-            sleep(4)
             logs += f'[{asin}] {self.colors["green"]}Continue button.{self.colors["reset"]}\n'
         except:
             logs += f'[{asin}] {self.colors["red"]}No continue button.{self.colors["reset"]}\n'
@@ -127,21 +133,22 @@ class AmazonDataScraper(BaseAmazonScraper):
             # Wait for the login form to appear
             WebDriverWait(self.driver, randint(1, 4)).until(EC.visibility_of_element_located((
                 By.CLASS_NAME, "auth-workflow")))
-            sleep(randint(2, 4))  # Sleep to avoid overwhelming the server
+            sleep(randint(1, 3))  # Sleep to avoid overwhelming the server
             logs += f'[{asin}] {self.colors["green"]}Login form.{self.colors["reset"]}\n'
             self.driver.get(link)
-            sleep(4)
         except TimeoutException:
             logs += f'[{asin}] {self.colors["red"]}No login form.{self.colors["reset"]}\n'
         except Exception as e:
             print(
                 f"{self.colors["red"]}[ERROR] Auth: {e}{self.colors["reset"]}")
+        
+        sleep(4)  # Sleep to avoid overwhelming the server
 
         # Check if the product belongs to the celphone category
         try:
             # Wait for the breadcrumbs to appear
             # and check if they contain the allowed breadcrumbs
-            breadcrumbs = WebDriverWait(self.driver, 8).until(EC.visibility_of_element_located((
+            breadcrumbs = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((
                 By.ID, "wayfinding-breadcrumbs_feature_div")))
 
             if any(breadcrumb in breadcrumbs.text.lower() for breadcrumb in allowed_breadcrums):
@@ -164,7 +171,7 @@ class AmazonDataScraper(BaseAmazonScraper):
                 EC.presence_of_element_located((By.ID, "productTitle")))
             if product_title.text == '':
                 raise NoSuchElementException('No title found.')
-            product["title"] = product_title.text  # Store the product title
+            product["title"] = product_title.text.replace("\n", "").replace("''", "\"").strip()  # Store the product title
             logs += f'[{asin}] {self.colors["green"]}Product title.{self.colors["reset"]}\n'
 
         except TimeoutException:
@@ -190,17 +197,25 @@ class AmazonDataScraper(BaseAmazonScraper):
         try:
             images_container = self.driver.find_element(
                 By.CLASS_NAME, 'regularAltImageViewLayout')
+            
 
             # Image URLs
             images = images_container.find_elements(By.TAG_NAME, "img")
-            for image in images:
-                image_link = image.get_attribute("src")
-                if any(forbidden_image in image_link for forbidden_image in forbidden_images):
-                    continue  # Skip non-product images
+            alt = images[1].get_attribute("alt").strip()
+            if alt == '':
+                if len(product["title"]) > 100:
+                    alt_image =product['title'][:100].strip()
+                    splited_alt = alt_image.split(' ')
+                    final_alt = " ".join(splited_alt[:-1]).lower().strip() + ' image'
+                    product["alt"] = final_alt
+                else:
+                    product["alt"] = f"{product['title'].strip()}_image"
+            image_link = images[1].get_attribute("src")
+            if not any(forbidden_image in image_link for forbidden_image in forbidden_images):
                 image_split = image_link.split('_')
                 image_split[-2] = f"{image_split[-2][:2]}679"
                 image_link = '_'.join(image_split)
-                product["images"].append({"url": image_link})
+                product["image"] = image_link
 
             logs += f'[{asin}] {self.colors["green"]}Images.{self.colors["reset"]}\n'
         except NoSuchElementException:
@@ -209,15 +224,21 @@ class AmazonDataScraper(BaseAmazonScraper):
 
             # Image URLs
             images = images_container.find_elements(By.TAG_NAME, "img")
-            for image in images:
-                image_link = image.get_attribute("src")
-                if any(forbidden_image in image_link for forbidden_image in forbidden_images):
-                    continue  # Skip non-product images
+            alt_images = images[1].get_attribute("alt").split(' ')
+            if alt_images == '':
+                if len(product["title"]) > 100:
+                    alt_image = product['title'][:100].strip()
+                    splited_alt = alt_image.split(' ')
+                    final_alt = " ".join(splited_alt[:-1]).lower().strip() + ' image'
+                    product["alt"] = final_alt
+                else:
+                    product["alt"] = f"{product['title'].strip()}_image"
+            image_link = images[1].get_attribute("src")
+            if not any(forbidden_image in image_link for forbidden_image in forbidden_images):
                 image_split = image_link.split('_')
                 image_split[-2] = f"{image_split[-2][:2]}679"
                 image_link = '_'.join(image_split)
-
-                product["images"].append({"url": image_link})
+                product["image"] = image_link
 
             logs += f'[{asin}] {self.colors["red"]}No images.{self.colors["reset"]}\n'
         except Exception as e:
@@ -250,23 +271,7 @@ class AmazonDataScraper(BaseAmazonScraper):
             return
 
         # Basis price and saving percentage
-        try:
-            saving_percentage = self.driver.find_element(
-                By.CLASS_NAME, "savingsPercentage")
-
-            # Extract and store the saving percentage if available
-            if saving_percentage.text != '':
-                saving_percentage = saving_percentage.text.replace(
-                    "%", '').replace('-', '')
-                product["saving_percentage"] = int(f"{saving_percentage}")
-
-            logs += f'[{asin}] {self.colors["green"]}Saving.{self.colors["reset"]}\n'
-        except NoSuchElementException:
-            logs += f'[{asin}] {self.colors["red"]}No saving.{self.colors["reset"]}\n'
-        except Exception as e:
-            print(
-                f"{self.colors["red"]} [ERROR] Savind percentage: {e} {self.colors["reset"]}")
-
+        
         try:
             basis_price = self.driver.find_element(
                 By.ID, "corePriceDisplay_desktop_feature_div")
@@ -373,7 +378,7 @@ class AmazonDataScraper(BaseAmazonScraper):
             del product
             return
 
-        # Product ranking
+        # Product opinions
         try:
             # Extract the product details section
             aditional_info = self.driver.find_element(
@@ -381,41 +386,24 @@ class AmazonDataScraper(BaseAmazonScraper):
             aditional_info_table = aditional_info.find_elements(
                 By.TAG_NAME, "tr")
             # Initialize the ranking variable
-            specified_aditional_info = 'clasificación en los más vendidos de amazon'
-            custumers_opinion = 'opinión media de los clientes'
+            customers_opinion = 'opinión media de los clientes'
 
             # Iterate through the additional info table to find the specified ranking
             for info in aditional_info_table:
                 header = info.find_element(By.TAG_NAME, "th").text.lower()
-                # Check if the header matches the specified additional info
-                if header == specified_aditional_info:
-                    specified_ranking = 'celulares y smartphones desbloqueados'
-                    rankings = info.find_elements(By.TAG_NAME, "li")
-                    # Iterate through the rankings to find the specified ranking
-                    for ranking in rankings:
-                        ranking_text = ranking.text.lower()
-                        # Check if the specified ranking is in the ranking text
-                        if specified_ranking in ranking_text:
-                            product["ranking"] = int(ranking_text.split(
-                                ' ')[0].replace('nº', '').replace(',', ''))
-                            break
-                elif header == custumers_opinion:
-                    custumers_opinion = info.find_element(
-                        By.TAG_NAME, "td").text.lower().split('\n')[-1]
-                    product["custumers_opinion"] = custumers_opinion
+                if header == customers_opinion:
+                    customers_opinion = info.find_element(
+                        By.TAG_NAME, "td").text.lower().split('\n')[-1].split(' ')[0]
+                    product["customers_opinion"] = float(customers_opinion)
 
-            if not product.get('ranking'):
-                raise NoSuchElementException('Ranking not found.')
-
-            logs += f'[{asin}] {self.colors["green"]}Ranking.{self.colors["reset"]}\n'
+            logs += f'[{asin}] {self.colors["green"]}Opinion.{self.colors["reset"]}\n'
         except NoSuchElementException:
-            logs += f'[{asin}] {self.colors["red"]}No ranking.{self.colors["reset"]}\n'
+            logs += f'[{asin}] {self.colors["red"]}No opinion.{self.colors["reset"]}\n'
         except Exception as e:
             print(
-                f"{self.colors["red"]} [ERROR] ranking: {e} {self.colors["reset"]}")
+                f"{self.colors["red"]} [ERROR] Opinions: {e} {self.colors["reset"]}")
 
         # Print the logs for debugging
         print(logs)
         del logs
-
         data.append(product)  # Append the product data to the list

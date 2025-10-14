@@ -3,6 +3,7 @@
 
 # It is for development only.
 test.py
+test*.html
 
 # Virtual environment directory
 .venv

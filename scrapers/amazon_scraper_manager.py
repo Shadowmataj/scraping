@@ -7,12 +7,14 @@ It initializes the scrapers, processes the product data, and saves the results t
 import os
 import requests
 import threading
+import json
 
 from getpass import getpass
 from time import sleep
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Type, TypeVar
+from requests.exceptions import JSONDecodeError
 
 from config import config
 from custom_exceptions import InvalidCredentials
@@ -38,6 +40,7 @@ class AmazonScraperManager():
         self.amazon_asin_scraper: Type[T] = data_scraper
         self.amazon_data_scraper: Type[T] = asin_scraper
         self.top_scraper: Type[T] = top_scraper
+        self.top_100_asins: dict = dict()
 
     def _api_request(
         self, func: Callable[..., requests.Response],
@@ -48,7 +51,13 @@ class AmazonScraperManager():
             options["url"] = f"{self.ip}{endpoint}"
             response = func(**options)
 
-            response_json = response.json()
+            try:
+                response_json = response.json()
+            except JSONDecodeError:
+                print(
+                    f"{self.colors['red']}Error decoding JSON response: {response.text}{self.colors['reset']}")
+                return {}
+
             if not response_json.get("error"):
                 return response_json
 
@@ -57,7 +66,6 @@ class AmazonScraperManager():
                 "The token has expired",
                 "Token not provided"
             ]
-            print(response_json)
             if response_json["message"] in messages:
                 if self.refresh_token:
                     self.token = self.refresh_token
@@ -157,6 +165,9 @@ class AmazonScraperManager():
 
     def get_asins(self) -> None:
         """Get the list of ASINs."""
+        print(
+            f"{self.colors['purple']}Loading ASINs to update...{self.colors['reset']}")
+
         asins_response = self._api_request(
             func=requests.get,
             endpoint="/api/products/amazon/id",
@@ -165,6 +176,8 @@ class AmazonScraperManager():
 
         if asins_response.get("asins"):
             self.asins_to_search["to_update"] = asins_response["asins"]
+            print(
+                f"{self.colors['purple']}ASINs to update found: {len(self.asins_to_search['to_update'])}.{self.colors['reset']}")
             print(
                 f"{self.colors['purple']}ASINs to update loaded.{self.colors['reset']}")
             sleep(2)
@@ -182,7 +195,8 @@ class AmazonScraperManager():
     def _scraper_process(
             self, list_to_split: list,
             scraper_class: Type[T],
-            data: list | dict) -> list | dict:
+            data: list | dict,
+            **kwargs: list) -> list | dict:
         """Function to process the ASINs using multiple threads.
         It initializes the AmazonAsinScraper for each thread and scrapes the ASINs"""
 
@@ -200,7 +214,8 @@ class AmazonScraperManager():
         for _ in range(workers):
             if isinstance(data, dict):
                 scraper_instance = scraper_class(
-                    asins_to_update=data["to_update"])
+                    asins_to_update=data.get("to_update", [])
+                )
             elif isinstance(data, list):
                 scraper_instance = scraper_class()
             scrapers_list.append(scraper_instance)
@@ -227,16 +242,33 @@ class AmazonScraperManager():
                 for future in as_completed(executor_list):
                     try:
                         result = future.result()
-                        if result:
+                        if isinstance(result, tuple):
+                            products_asins, products_to_patch = result
                             with lock:
-                                if isinstance(data, dict):
-                                    for key, value in result.items():
-                                        data[key] = value
-                                elif isinstance(data, list):
-                                    data.extend(result)
+                                for key, value in products_asins.items():
+                                    for v in value:
+                                        if v in self.top_100_asins.keys():
+                                            value.remove(v)
+                                            print(
+                                                f"{self.colors["purple"]} Value Removed: {v}{self.colors["reset"]}")
+                                    data[key] = value
+
+                                for product in products_to_patch:
+                                    if product["asin"] in self.top_100_asins.keys():
+                                        print(
+                                            f"{self.colors['purple']}Scraped product {product['asin']}{self.colors['reset']}")
+                                        product["ranking"] = self.top_100_asins[product["asin"]]
+                                        self.top_100_asins.pop(product["asin"])
+
+                                kwargs["products_data"].extend(
+                                    products_to_patch)
+
+                        elif isinstance(result, list):
+                            with lock:
+                                data.extend(result)
                     except Exception as e:
                         print(
-                            f"{self.colors['red']}Error en scraper: {e}{self.colors["reset"]}")
+                            f"{self.colors['red']}Error en scraper: {e}{self.colors['reset']}")
         except KeyboardInterrupt:
             print(
                 f"{self.colors['red']}Process interrupted by user.{self.colors['reset']}")
@@ -252,10 +284,10 @@ class AmazonScraperManager():
             print(
                 f"{self.colors['red']}ThreadPoolExecutor error: {e}{self.colors['reset']}")
 
-        # Return the scraped data
-
     def _start_scrapers(self) -> list:
         """Main function to start the scraping process."""
+
+        products_list = list()
 
         print(f"Searching for this brands:")
         for brand_to_search in self.brands:
@@ -266,8 +298,36 @@ class AmazonScraperManager():
         self._scraper_process(
             list_to_split=self.brands,
             scraper_class=self.amazon_asin_scraper,
-            data=self.asins_to_search
+            data=self.asins_to_search,
+            products_data=products_list
         )  # Scrape ASINs
+
+        # Patch the products that need to be updated
+        patch_response = self._api_request(
+            func=requests.patch,
+            endpoint="/api/products/amazon",
+            json=products_list,
+            headers=self.header
+        )
+        print(
+            f"{self.colors['purple']}{patch_response}{self.colors['reset']}")
+
+        products_to_search_set = {
+            asin for asin in self.asins_to_search.get("to_update", [])}
+
+        print(f"self.asins_to_search: {len(products_to_search_set)}")
+        print("Removing already updated ASINs...")
+
+        # Remove the ASINs that were updated from the
+        for product in products_list:
+            asin = product.get("asin")
+            if asin in products_to_search_set:
+                products_to_search_set.remove(asin)
+
+        self.asins_to_search["to_update"] = list(products_to_search_set)
+
+        print(
+            f"{self.colors['purple']}self.asins_to_search: {len(self.asins_to_search.get('to_update', []))}{self.colors['reset']}")
 
         # Prints the number of products found
         first_acc = 0
@@ -275,7 +335,7 @@ class AmazonScraperManager():
             first_acc += len(asins)
 
         print(
-            f"Products found: {self.colors['blue']}{first_acc}{self.colors['reset']}.")
+            f"{self.colors['purple']}Products found: {self.colors['blue']}{first_acc}{self.colors['reset']}.")
 
         # Append the ASINs to the data list
         final_dict = {}
@@ -293,6 +353,17 @@ class AmazonScraperManager():
             print(
                 f"{brand.title()} products processed: {self.colors['blue']}{len(products)}/{len(asins)}{self.colors['reset']}.")
 
+        # Finally, process the top 100 ASINs
+        print(
+            f"{self.colors['purple']}Processing top 100 ASINs...{self.colors['reset']}")
+        top_100_products = list()
+        self._scraper_process(
+            list_to_split=[{k: v}for k, v in self.top_100_asins.items()],
+            scraper_class=self.amazon_data_scraper,
+            data=top_100_products
+        )
+        final_dict["top_100"] = top_100_products
+
         self.clear_asins()  # Clear the ASINs dictionary to free memory
 
         last_acc = 0
@@ -307,23 +378,39 @@ class AmazonScraperManager():
     def main(self) -> None:
         """Main entry point for the scraper manager. It handles the login, scraping process, and saving the results."""
 
+        self.top_100_asins = self.top_scraper().main_method()
+        print(
+            f"{self.colors['purple']}Top 100 ASINs found: {len(self.top_100_asins)}{self.colors['reset']}")
+
         products_dict = self._start_scrapers()
 
         for key, value in products_dict.items():
-            if key == "to_update":
-                put_response = self._api_request(
-                    func=requests.put,
-                    endpoint="/api/products/amazon",
-                    json=value,
-                    headers=self.header
-                )
+
+            post_list = list()
+            put_response = self._api_request(
+                func=requests.put,
+                endpoint="/api/products/amazon",
+                json=value,
+                headers=self.header
+            )
+            print(
+                f"{self.colors['purple']}{key}: {put_response}{self.colors['reset']}")
+
+            if put_response.get("to_create"):
+                to_create = put_response["to_create"]
+                if not len(to_create):
+                    continue
+
+                for v in value:
+                    if v["asin"] in to_create:
+                        post_list.append(v)
                 print(
-                    f"{self.colors["purple"]}{put_response}{self.colors["reset"]}")
-            else:
+                    f"{self.colors['purple']}Products to create: {len(post_list)}{self.colors['reset']}")
+
                 post_response = self._api_request(
                     func=requests.post,
                     endpoint="/api/products/amazon",
-                    json=value,
+                    json=post_list,
                     headers=self.header
                 )
                 print(

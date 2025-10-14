@@ -67,7 +67,11 @@ def menu(scraper: AmazonScraperManager, file: Path):
         print("1.- Regular update.")
         print("2.- Add a new brands or search or a specific brand.")
         print("3.- Exit.")
-        option = int(input("Select an option: "))
+        try:
+            option = int(input("Select an option: "))
+        except ValueError:
+            continue
+    
 
         match option:
             case 1:
